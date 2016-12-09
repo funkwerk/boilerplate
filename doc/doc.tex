@@ -1,0 +1,116 @@
+\newcommand{\lstitem}[1]{\item \lstinline{#1}:\linebreak[4]}
+
+\section*{boilerplate 0.0.9}
+
+libboilerplate generates boilerplate code handling common tasks. Code generation is driven by user-defined attributes.
+Use \lstinline{mixin(GenerateAll);} to handle all attributes. This is usually the right thing to do.
+By default, boilerplate covers all non-static member fields of the class, although accessors can also be
+explicitly applied to static fields.
+
+Boilerplate will generate accessors, toString functions, invariants and constructors.
+
+% If you need to generate any boilerplate component in isolation, use
+% \lstinline{mixin(} \lstinline{GenerateFieldAccessors)}, \lstinline{mixin(GenerateToString)},
+% \lstinline{mixin(GenerateInvariants)} or \lstinline{mixin(GenerateThis)}.
+
+libboilerplate is a superset of libaccessors.
+
+\vspace*{\fill}
+%\columnbreak
+
+\section*{boilerplate.accessors}
+\begin{itemize}\raggedright
+\lstitem{@Read} Generate an accessor that returns the field. Will \lstinline{dup} arrays when needed. Unneeded const is discarded.
+\lstitem{@ConstRead} Generate an accessor that returns the field as const.
+\lstitem{@RefRead} Generate an accessor that returns the field as \lstinline{ref}. \emph{Deprecated.}
+\lstitem{@Write} Generate an accessor that sets the field to a value. Will \lstinline{dup} arrays when needed.
+\end{itemize}
+
+A string can be passed to the attribute to determine the visibility of the accessor, such as
+\lstinline{@ConstRead("protected")} or \lstinline{@Write("private")}.
+
+\vspace*{\fill}
+%\columnbreak
+
+\section*{boilerplate.autostring}
+Autostring implements Funkwerk standard toString logic.
+Both sink-based and string-based toString functions are generated.
+
+The string takes the form "ClassName(field = value, field = value, field = value)".
+
+If the type is a class, and the superclass has a toString method, it is output first.
+
+If toString is already defined, it is called instead.
+
+By default, fields that have the same name as their type are not labelled.
+For array types, this requires pluralized names. (\lstinline{Class[] classes} is not labeled.)
+
+The following attributes can be applied to the whole structure:
+\begin{itemize}\raggedright
+\lstitem{@(ToString.Naked)} Do not include "ClassName()".
+\lstitem{@(ToString.ExcludeSuper)} Do not include the parent class.
+\end{itemize}
+
+The following attributes can be applied to fields:
+\begin{itemize}\raggedright
+\lstitem{@(ToString.Exclude)} Exclude a field from toString.
+\lstitem{@(ToString.Include)} Explicitly include a field. Useful for printing manual getter functions.
+\lstitem{@(ToString.Optional)} Include the field if it's non-empty, non-null or non-zero.
+Nullable types are always optional.
+\lstitem{@(ToString.Unlabeled)} Skip the label; "ClassName(value)".
+\lstitem{@(ToString.Labeled)} Explicitly include the label.
+\lstitem{@ToStringHandler!pred} \lstinline{pred(a)}: use \lstinline{pred} to transform the field into a string.
+\lstitem{@ToStringHandler!pred} \lstinline{pred(a, ref SinkWriter)}: use \lstinline{pred} to feed the field into a
+SinkWriter.
+\end{itemize}
+
+\textbf{Note} that ToStringHandlers are generally a code smell, since they imply a field whose format does not
+depend on just the type. ToStringHandler is intended for quick and dirty toString conversions, to be cleaned up at the
+earliest convenience.
+
+\vspace*{\fill}
+%\columnbreak
+
+\section*{boilerplate.conditions}
+These attributes will generate invariant checks, ensuring that the value of the field does not
+violate the condition. Note that \lstinline{@RefRead} fields \emph{cannot} be reliably verified!
+
+When a field is \lstinline{Nullable}, the check is applied to its value, if one is present.
+
+\begin{itemize}\raggedright
+\lstitem{@NonEmpty} \lstinline{!field.empty()}
+\lstitem{@NonNull} \lstinline{field !is null}
+\lstitem{@NonInit} \lstinline{field !is T.init}
+\lstitem{@AllNonNull} \lstinline{field !is null} for all fields of an array
+\end{itemize}
+
+When using the \lstinline{@Write} accessor, the defined conditions will be checked separately on assignment.
+When a check fails, the value of the field will be unchanged.
+
+\vspace*{\fill}
+%\columnbreak
+
+\section*{boilerplate.constructor}
+A constructor is generated that takes one parameter for every field in the class. The parameters are in the same order
+as the fields. The constructor is \lstinline{public} by default.
+
+Mark a field with \lstinline{@Default!value} to provide a default value
+for the field's parameter in the constructor call. If the value is only valid at runtime, use
+\lstinline{@Default!(() => value)}.
+
+As with accessors, arrays passed to the constructor are \lstinline{dup}ed, even when wrapped in Nullable.
+
+If the superclass also has a \emph{boilerplate-generated} constructor, the fields of that constructor are
+also included. In that case, depending on what fields have default values (implicit) or not (explicit),
+the order of arguments is "parent's explicit, child's explicit, child's implicit, parent's implicit."
+
+A field can be tagged with \lstinline{@(This.Exclude)} to exclude it from the generated constructor.
+
+The following attributes can be applied to the whole structure:
+\begin{itemize}\raggedright
+\lstitem{@(This.Private)} Mark the constructor as \lstinline{private}.
+\lstitem{@(This.Protected)} Mark the constructor as \lstinline{protected}.
+\lstitem{@(This.Package)} Mark the constructor as \lstinline{package}.
+\end{itemize}
+
+\vspace*{\fill}
