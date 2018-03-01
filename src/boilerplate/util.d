@@ -193,30 +193,26 @@ string isStatic(string field)
 }
 
 // a stable, simple O(n) sort optimal for a small number of sort keys
-T[] bucketSort(T)(T[] array, int delegate(T) rankfn)
+T[] bucketSort(T)(T[] inputArray, int delegate(T) rankfn)
 {
+    import std.algorithm : joiner;
+    import std.range : array;
+
     T[][] buckets;
 
-    foreach (element; array)
+    foreach (element; inputArray)
     {
         auto rank = rankfn(element);
 
-        while (rank >= buckets.length)
+        if (rank >= buckets.length)
         {
-            buckets ~= null;
+            buckets.length = rank + 1;
         }
 
         buckets[rank] ~= element;
     }
 
-    T[] res;
-
-    foreach (bucket; buckets)
-    {
-        res ~= bucket;
-    }
-
-    return res;
+    return buckets.joiner.array;
 }
 
 void sinkWrite(T)(scope void delegate(const(char)[]) sink, ref bool comma, string fmt, T arg)
