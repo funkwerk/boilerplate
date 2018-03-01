@@ -54,6 +54,10 @@ unittest
     }
 }
 
+/**
+ * Generate AliasSeq of "normal" members - ie. no templates, no alias, no enum, only fields
+ * (and functions if includeFunctions is true).
+ */
 mixin template GenNormalMemberTuple(bool includeFunctions = false)
 {
     import boilerplate.util : GenNormalMembersCheck, GenNormalMembersImpl;
@@ -68,10 +72,13 @@ string GenNormalMembersCheck(string[] members, bool includeFunctions)
     import std.format : format;
     import std.string : join;
 
-    string res = "[";
+    string code = "[";
     foreach (i, member; members)
     {
-        if (i > 0) res ~= ", ";
+        if (i > 0)
+        {
+            code ~= ", "; // don't .map.join because this is compile performance critical code
+        }
 
         if (member != "this")
         {
@@ -84,33 +91,33 @@ string GenNormalMembersCheck(string[] members, bool includeFunctions)
                     ~ ` && !is(typeof(&typeof(this).init.` ~ member ~ `) == delegate)`;
             }
 
-            res ~= check;
+            code ~= check;
         }
         else
         {
-            res ~= `false`;
+            code ~= `false`;
         }
     }
-    res ~= "]";
+    code ~= "]";
 
-    return res;
+    return code;
 }
 
 string GenNormalMembersImpl(string[] members, bool[] compiles)
 {
     import std.string : join;
 
-    string[] res;
+    string[] names;
 
     foreach (i, member; members)
     {
         if (member != "this" && compiles[i])
         {
-            res ~= "\"" ~ member ~ "\"";
+            names ~= "\"" ~ member ~ "\"";
         }
     }
 
-    return "AliasSeq!(" ~ res.join(", ") ~ ")";
+    return "AliasSeq!(" ~ names.join(", ") ~ ")";
 }
 
 template getOverloadLike(Aggregate, string Name, Type)

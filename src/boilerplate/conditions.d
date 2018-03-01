@@ -240,9 +240,12 @@ mixin template GenerateInvariantsTemplate()
             `import std.format : format;` ~
             `import std.array : empty;`;
 
-        // synchronized without lock contention is basically free, so always do it
-        // TODO enable when https://issues.dlang.org/show_bug.cgi?id=18504 is fixed<
-        enum synchronize = false && is(typeof(this) == class);
+        // TODO blocked by https://issues.dlang.org/show_bug.cgi?id=18504
+        // note: synchronized without lock contention is basically free
+        // IMPORTANT! Do not enable this until you have a solution for reliably detecting which attributes actually
+        // require synchronization! overzealous synchronize has the potential to lead to needless deadlocks.
+        // (consider implementing @GuardedBy)
+        enum synchronize = false;
 
         result ~= synchronize ? `synchronized (this) {` : ``;
 
@@ -272,6 +275,7 @@ public string generateChecksForAttributes(T, Attributes...)(string member_expres
 {
     import boilerplate.conditions : NonEmpty, NonNull;
     import boilerplate.util : udaIndex;
+    import std.array : empty;
     import std.string : format;
     import std.traits : ConstOf, isAssociativeArray;
     import std.typecons : Nullable;
@@ -297,8 +301,6 @@ public string generateChecksForAttributes(T, Attributes...)(string member_expres
 
     static if (udaIndex!(NonEmpty, Attributes) != -1)
     {
-        import std.array : empty;
-
         static if (!__traits(compiles, MemberType.init.empty()))
         {
             return format!`static assert(false, "Cannot call std.array.empty() on '%s'");`(expression);
@@ -431,7 +433,7 @@ public string generateChecksForAttributes(T, Attributes...)(string member_expres
         }
     }
 
-    if (!checks.length)
+    if (checks.empty)
     {
         return null;
     }
