@@ -168,7 +168,8 @@ string GenerateReader(T)(string name, bool fieldIsStatic, bool synchronize)
     }
     else static if (DeepConst!(Unqual!T) && !is(Unqual!T == T))
     {
-        auto accessor_body = format!`return cast() this.%s;`(name);
+        // necessitated by DMD bug https://issues.dlang.org/show_bug.cgi?id=18545
+        auto accessor_body = format!`typeof(cast() this.%s) var = this.%s; return var;`(name, name);
     }
     else
     {
@@ -218,7 +219,7 @@ string GenerateReader(T)(string name, bool fieldIsStatic, bool synchronize)
       ~ "{ return typeof(this.foo).init ~ this.foo; }");
     static assert(GenerateReader!(const string)("foo", true, false) ==
         "public static final @property auto foo() @nogc nothrow @safe "
-      ~ "{ return cast() this.foo; }");
+      ~ "{ typeof(cast() this.foo) var = this.foo; return var; }");
 }
 
 string GenerateRefReader(T)(string name, bool isStatic)
@@ -541,6 +542,25 @@ nothrow pure @safe unittest
         assert(test.get == "X");
 
         static assert(is(typeof(test) == Nullable!string));
+    }
+}
+
+@("does not break with const Nullable accessor")
+nothrow pure @safe unittest
+{
+    import std.typecons : Nullable;
+
+    class Test
+    {
+        @Read
+        private const Nullable!string test_;
+
+        mixin(GenerateFieldAccessors);
+    }
+
+    with (new Test)
+    {
+        assert(test.isNull);
     }
 }
 
