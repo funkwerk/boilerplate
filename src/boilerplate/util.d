@@ -245,35 +245,37 @@ void sinkWrite(T)(scope void delegate(const(char)[]) sink, ref bool comma, strin
         }
         return;
     }
-
-    static if (is(PlainT == SysTime))
-    {
-        if (arg == SysTime.init) // crashes on toString
-        {
-            return;
-        }
-    }
-
-    if (comma)
-    {
-        sink(", ");
-    }
-
-    comma = true;
-
-    static if (__traits(compiles, customToString(arg, sink)))
-    {
-        struct TypeWrapper
-        {
-            void toString(scope void delegate(const(char)[]) sink) const
-            {
-                customToString(arg, sink);
-            }
-        }
-        sink.formattedWrite(fmt, TypeWrapper());
-    }
     else
     {
-        sink.formattedWrite(fmt, arg);
+        static if (is(PlainT == SysTime))
+        {
+            if (arg == SysTime.init) // crashes on toString
+            {
+                return;
+            }
+        }
+
+        if (comma)
+        {
+            sink(", ");
+        }
+
+        comma = true;
+
+        static if (__traits(compiles, customToString(arg, sink)))
+        {
+            struct TypeWrapper
+            {
+                void toString(scope void delegate(const(char)[]) sink) const
+                {
+                    customToString(arg, sink);
+                }
+            }
+            sink.formattedWrite(fmt, TypeWrapper());
+        }
+        else
+        {
+            sink.formattedWrite(fmt, arg);
+        }
     }
 }
