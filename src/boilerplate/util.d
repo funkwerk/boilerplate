@@ -224,7 +224,7 @@ T[] bucketSort(T)(T[] inputArray, int delegate(T) rankfn)
 
 void sinkWrite(T)(scope void delegate(const(char)[]) sink, ref bool comma, string fmt, T arg)
 {
-    static assert (__traits(compiles, { import config.string; }),
+    static assert (__traits(compiles, { import config.string : toString; }),
         "Please define config.string, containing functions of the form"
         ~ " void toString(T, scope void delegate(const(char)[]) sink) const");
 

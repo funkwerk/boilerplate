@@ -288,7 +288,7 @@ unittest
 /++
 Fields of type 'SysTime' and name 'time' are unlabeled by default.
 +/
-@("does not label SysTime time field")
+@("does not label SysTime time field correctly")
 unittest
 {
     struct Struct { SysTime time; mixin(GenerateToString); }
@@ -296,6 +296,7 @@ unittest
     Struct strct;
     strct.time = SysTime.fromISOExtString("2003-02-01T11:55:00Z");
 
+    // see unittest/config/string.d
     strct.to!string.shouldEqual("Struct(2003-02-01T11:55:00Z)");
 }
 
