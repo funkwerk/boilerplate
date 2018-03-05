@@ -455,10 +455,6 @@ mixin template GenerateThisTemplate()
                 import boilerplate.util: isStatic;
 
                 includeMember = true;
-                if (is(symbol == function) || is(typeof(symbol) == function))
-                {
-                    includeMember = false;
-                }
 
                 if (mixin(isStatic(member)))
                 {

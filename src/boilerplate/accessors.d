@@ -60,7 +60,7 @@ mixin template GenerateFieldAccessorMethods()
             mixin("alias field = " ~ fieldCode ~ ";");
 
             // synchronized without lock contention is basically free, so always do it
-            // TODO enable when https://issues.dlang.org/show_bug.cgi?id=18504 is fixed<
+            // TODO enable when https://issues.dlang.org/show_bug.cgi?id=18504 is fixed
             enum synchronize = false && is(typeof(field) == class);
 
             static if (udaIndex!(Read, __traits(getAttributes, field)) != -1)

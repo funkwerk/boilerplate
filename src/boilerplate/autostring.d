@@ -89,6 +89,7 @@ unittest
 
     Struct.init.to!string.shouldEqual("Struct()");
     Struct(2, "hi", new Class).to!string.shouldEqual("Struct(a=2, s=hi, obj=Class())");
+    Struct(0, "", null).to!string.shouldEqual("Struct()");
 }
 
 /++
@@ -457,7 +458,7 @@ mixin template GenerateToStringTemplate()
                 (typeof(this).stringof);
         }
 
-        mixin GenNormalMemberTuple!(true);
+        mixin GenNormalMemberTuple!true;
 
         foreach (member; NormalMemberTuple)
         {
@@ -485,7 +486,7 @@ mixin template GenerateToStringTemplate()
         import boilerplate.util : GenNormalMemberTuple, udaIndex;
 
         // synchronized without lock contention is basically free, so always do it
-        // TODO enable when https://issues.dlang.org/show_bug.cgi?id=18504 is fixed<
+        // TODO enable when https://issues.dlang.org/show_bug.cgi?id=18504 is fixed
         enum synchronize = false && is(typeof(this) == class);
 
         const constExample = typeof(this).init;
@@ -654,8 +655,6 @@ mixin template GenerateToStringTemplate()
                     enum udaOptional = udaIndex!(ToString.Optional, __traits(getAttributes, symbol)) != -1;
                     enum udaToStringHandler = udaIndex!(ToStringHandler, __traits(getAttributes, symbol)) != -1;
 
-                    enum isCtorDtor = member == "__ctor" || member == "__dtor" || member == "this";
-
                     // see std.traits.isFunction!()
                     static if (is(symbol == function) || is(typeof(symbol) == function)
                         || is(typeof(&symbol) U : U*) && is(U == function))
@@ -669,14 +668,15 @@ mixin template GenerateToStringTemplate()
 
                     enum includeOverride = udaInclude || udaOptional;
 
-                    enum includeMember = (!isCtorDtor && !isFunction || udaInclude || udaOptional) && !udaExclude;
+                    enum includeMember = (!isFunction || includeOverride) && !udaExclude;
 
                     static if (includeMember)
                     {
                         string memberName = member;
+
                         if (memberName.endsWith("_"))
                         {
-                            memberName = memberName[0  ..  $ - 1];
+                            memberName = memberName[0 .. $ - 1];
                         }
 
                         bool labeled = true;
