@@ -1,1 +1,4 @@
+*.[oa]
 /.dub
+/dub.selections.json
+/boilerplate-test-library

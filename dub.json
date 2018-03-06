@@ -1,0 +1,20 @@
+{
+	"name": "boilerplate",
+	"description": "D boilerplate code generator",
+	"license": "BSL-1.0",
+	"authors": [
+		"Mathis Beer"
+	],
+
+	"targetType": "library",
+
+	"dependencies": {
+		"unit-threaded": "*"
+	},
+
+	"configurations": [
+		{
+			"name": "library"
+		}
+	]
+}
