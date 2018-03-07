@@ -224,11 +224,18 @@ T[] bucketSort(T)(T[] inputArray, int delegate(T) rankfn)
 
 void sinkWrite(T)(scope void delegate(const(char)[]) sink, ref bool comma, string fmt, T arg)
 {
-    static assert (__traits(compiles, { import config.string : toString; }),
-        "Please define config.string, containing functions of the form"
-        ~ " void toString(T, scope void delegate(const(char)[]) sink) const");
+	static if (__traits(compiles, { import config.string : toString; }))
+	{
+		import config.string : customToString = toString;
+	}
+	else
+	{
+		void customToString(T)()
+		if (false)
+		{
+		}
+	}
 
-    import config.string : customToString = toString;
     import std.datetime : SysTime;
     import std.format : formattedWrite;
     import std.typecons : Nullable;
