@@ -1,6 +1,8 @@
 # boilerplate
 
+[![Build Status](https://travis-ci.org/funkwerk/boilerplate.svg?branch=master)](https://travis-ci.org/funkwerk/boilerplate)
 [![License](https://img.shields.io/badge/license-BSL_1.0-blue.svg)](https://raw.githubusercontent.com/funkwerk/boilerplate/master/LICENSE)
+[![Dub Version](https://img.shields.io/dub/v/boilerplate.svg)](https://code.dlang.org/packages/boilerplate)
 
 libboilerplate generates boilerplate code handling common tasks. Code generation is driven by user-defined attributes.
 Use `mixin(GenerateAll);` to handle all attributes. This is usually the right thing to do.
