@@ -1,5 +1,7 @@
 # boilerplate
 
+[![License](https://img.shields.io/badge/license-BSL_1.0-blue.svg)](https://raw.githubusercontent.com/funkwerk/boilerplate/master/LICENSE)
+
 libboilerplate generates boilerplate code handling common tasks. Code generation is driven by user-defined attributes.
 Use `mixin(GenerateAll);` to handle all attributes. This is usually the right thing to do.
 By default, boilerplate covers all non-static member fields of the class, although accessors can also be
