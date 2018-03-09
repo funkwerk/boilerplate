@@ -526,7 +526,7 @@ mixin template GenerateThisTemplate()
             result ~= type ~ ` ` ~ args[i] ~ defaultAssignments[i];
         }
 
-        result ~= `) {`;
+        result ~= `) pure nothrow @safe {`;
 
         static if (is(typeof(typeof(super).GeneratedConstructorFields_)))
         {
