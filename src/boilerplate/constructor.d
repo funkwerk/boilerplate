@@ -321,6 +321,19 @@ unittest
     static assert(!__traits(compiles, new Class(0, 0)));
 }
 
+@("declares @nogc on non-dupping constructors")
+@nogc unittest
+{
+    struct Struct
+    {
+        int a;
+
+        mixin(GenerateThis);
+    }
+
+    auto str = Struct(5);
+}
+
 import std.string : format;
 
 enum GetSuperTypeAsString_(size_t Index) = format!`typeof(super).GeneratedConstructorTypes_[%s]`(Index);
@@ -417,6 +430,8 @@ mixin template GenerateThisTemplate()
         string[] useDefaultsStr;
         string[] types;
 
+        bool anyDups = false;
+
         foreach (i; aliasSeqOf!(members.length.iota))
         {
             enum member = members[i];
@@ -484,6 +499,8 @@ mixin template GenerateThisTemplate()
 
             if (dupExpr)
             {
+                anyDups = true;
+
                 static if (isNullable)
                 {
                     argexpr = format!`%s.isNull ? %s.init : %s(%s.get.dup)`
@@ -526,7 +543,7 @@ mixin template GenerateThisTemplate()
             result ~= type ~ ` ` ~ args[i] ~ defaultAssignments[i];
         }
 
-        result ~= `) pure nothrow @safe {`;
+        result ~= format!`) pure %snothrow @safe {`(anyDups ? `` : `@nogc `);
 
         static if (is(typeof(typeof(super).GeneratedConstructorFields_)))
         {
