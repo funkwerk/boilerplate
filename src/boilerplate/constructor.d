@@ -137,6 +137,18 @@ unittest
 }
 
 ///
+@("creates no constructor for an empty struct")
+unittest
+{
+    struct Struct
+    {
+        mixin(GenerateThis);
+    }
+
+    auto strct = Struct();
+}
+
+///
 @("properly generates new default values on each call")
 unittest
 {
@@ -560,21 +572,33 @@ mixin template GenerateThisTemplate()
 
         result ~= `}`;
 
-        result ~= `protected static enum string[] GeneratedConstructorFields_ = [`
-            ~ quotedFields.join(`, `)
-            ~ `];`;
+        static if (!is(typeof(this) == struct))
+        {
+            // don't emit inheritance info for structs
+            result ~= `protected static enum string[] GeneratedConstructorFields_ = [`
+                ~ quotedFields.join(`, `)
+                ~ `];`;
 
-        result ~= `protected static alias GeneratedConstructorTypes_ = AliasSeq!(`
-            ~ types.join(`, `)
-            ~ `);`;
+            result ~= `protected static alias GeneratedConstructorTypes_ = AliasSeq!(`
+                ~ types.join(`, `)
+                ~ `);`;
 
-        result ~= `protected static enum bool[] GeneratedConstructorUseDefaults_ = [`
-            ~ useDefaultsStr.join(`, `)
-            ~ `];`;
+            result ~= `protected static enum bool[] GeneratedConstructorUseDefaults_ = [`
+                ~ useDefaultsStr.join(`, `)
+                ~ `];`;
 
-        result ~= `protected static alias GeneratedConstructorDefaults_ = AliasSeq!(`
-            ~ defaults.join(`, `)
-            ~ `);`;
+            result ~= `protected static alias GeneratedConstructorDefaults_ = AliasSeq!(`
+                ~ defaults.join(`, `)
+                ~ `);`;
+        }
+        else
+        {
+            if (fields.length == 0)
+            {
+                // don't generate empty constructor for structs
+                return "";
+            }
+        }
 
         return result;
     }
