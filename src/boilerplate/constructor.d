@@ -9,7 +9,7 @@ version(unittest)
 GenerateThis is a mixin string that automatically generates a this() function, customizable with UDA.
 +/
 public enum string GenerateThis = `
-    import boilerplate.constructor: GenerateThisTemplate, Default, getUDADefaultOrNothing;
+    import boilerplate.constructor: GenerateThisTemplate, getUDADefaultOrNothing;
     import boilerplate.util: udaIndex;
     import std.meta : AliasSeq;
     mixin GenerateThisTemplate;
@@ -121,7 +121,7 @@ unittest
 {
     class Class
     {
-        @Default!5
+        @(This.Default!5)
         int value = 5;
 
         mixin(GenerateThis);
@@ -156,7 +156,7 @@ unittest
 
     class Class
     {
-        @Default!(() => new Object)
+        @(This.Default!(() => new Object))
         Object obj;
 
         mixin(GenerateThis);
@@ -176,7 +176,7 @@ unittest
     {
         int field1;
 
-        @Default!2
+        @(This.Default!2)
         int field2 = 2;
 
         mixin(GenerateThis);
@@ -186,7 +186,7 @@ unittest
     {
         int field3;
 
-        @Default!4
+        @(This.Default!4)
         int field4 = 4;
 
         mixin(GenerateThis);
@@ -269,7 +269,7 @@ unittest
 {
     class Class
     {
-        @Default!(() => new Object)
+        @(This.Default!(() => new Object))
         Object foo;
 
         mixin(GenerateThis);
@@ -346,6 +346,67 @@ unittest
     auto str = Struct(5);
 }
 
+///
+@("can initialize fields using init value")
+unittest
+{
+    class Class
+    {
+        @(This.Init!5)
+        int field1;
+
+        @(This.Init!(() => 8))
+        int field2;
+
+        mixin(GenerateThis);
+    }
+
+    auto obj = new Class;
+
+    obj.field1.shouldEqual(5);
+    obj.field2.shouldEqual(8);
+}
+
+///
+@("can initialize fields using init value, with lambda that accesses previous value")
+unittest
+{
+    class Class
+    {
+        int field1;
+
+        @(This.Init!(self => self.field1 + 5))
+        int field2;
+
+        mixin(GenerateThis);
+    }
+
+    auto obj = new Class(5);
+
+    obj.field1.shouldEqual(5);
+    obj.field2.shouldEqual(10);
+}
+
+///
+@("still supports deprecated default attribute")
+unittest
+{
+    class Class
+    {
+        @Default!5
+        int value = 5;
+
+        mixin(GenerateThis);
+    }
+
+    auto obj1 = new Class();
+
+    obj1.value.shouldEqual(5);
+
+    auto obj2 = new Class(6);
+
+    obj2.value.shouldEqual(6);
+}
 import std.string : format;
 
 enum GetSuperTypeAsString_(size_t Index) = format!`typeof(super).GeneratedConstructorTypes_[%s]`(Index);
@@ -382,7 +443,7 @@ mixin template GenerateThisTemplate()
 
         foreach (uda; __traits(getAttributes, typeof(this)))
         {
-            static if (is(typeof(uda) == This))
+            static if (is(typeof(uda) == ThisEnum))
             {
                 static if (uda == This.Protected)
                 {
@@ -400,7 +461,8 @@ mixin template GenerateThisTemplate()
         }
 
         enum MemberUseDefault(string Member)
-            = mixin(format!`udaIndex!(Default, __traits(getAttributes, this.%s)) != -1`(Member));
+            = mixin(format!(`udaIndex!(This.Default, __traits(getAttributes, this.%s)) != -1`~
+                `|| udaIndex!(Default, __traits(getAttributes, this.%s)) != -1`)(Member, Member));
 
         static if (is(typeof(typeof(super).GeneratedConstructorFields_)))
         {
@@ -441,6 +503,9 @@ mixin template GenerateThisTemplate()
         string[] defaultAssignments;
         string[] useDefaultsStr;
         string[] types;
+        string[] directInitFields;
+        int[] directInitIndex;
+        bool[] directInitUseSelf;
 
         bool anyDups = false;
 
@@ -485,6 +550,17 @@ mixin template GenerateThisTemplate()
 
                 if (mixin(isStatic(member)))
                 {
+                    includeMember = false;
+                }
+
+                static if (udaIndex!(This.Init, __traits(getAttributes, symbol)) != -1)
+                {
+                    enum udaFieldIndex = udaIndex!(This.Init, __traits(getAttributes, symbol));
+
+                    directInitFields ~= member;
+                    directInitIndex ~= udaFieldIndex;
+                    directInitUseSelf ~= __traits(compiles,
+                        __traits(getAttributes, symbol)[udaFieldIndex].value(typeof(this).init));
                     includeMember = false;
                 }
 
@@ -570,6 +646,20 @@ mixin template GenerateThisTemplate()
             result ~= `this.` ~ field ~ ` = ` ~ argexpr ~ `;`;
         }
 
+        foreach (i, field; directInitFields)
+        {
+            if (directInitUseSelf[i])
+            {
+                result ~= format!`this.%s = __traits(getAttributes, this.%s)[%s].value(this);`
+                    (field, field, directInitIndex[i]);
+            }
+            else
+            {
+                result ~= format!`this.%s = __traits(getAttributes, this.%s)[%s].value;`
+                    (field, field, directInitIndex[i]);
+            }
+        }
+
         result ~= `}`;
 
         static if (!is(typeof(this) == struct))
@@ -604,6 +694,7 @@ mixin template GenerateThisTemplate()
     }
 }
 
+deprecated("Please use This.Default")
 struct Default(alias Alias)
 {
     static if (__traits(compiles, Alias()))
@@ -616,7 +707,7 @@ struct Default(alias Alias)
     }
 }
 
-enum This
+enum ThisEnum
 {
     Private,
     Protected,
@@ -624,26 +715,35 @@ enum This
     Exclude
 }
 
-private size_t udaDefaultIndex(alias Symbol)()
+struct This
 {
-    enum numTraits = __traits(getAttributes, Symbol).length;
+    enum Private = ThisEnum.Private;
+    enum Protected = ThisEnum.Protected;
+    enum Package = ThisEnum.Package;
+    enum Exclude = ThisEnum.Exclude;
 
-    static if (numTraits == 0)
+    // construct with value
+    static struct Init(alias Alias)
     {
-        return -1;
-    }
-    else
-    {
-        foreach (i, uda; __traits(getAttributes, Symbol))
+        static if (__traits(compiles, Alias()))
         {
-            static if (is(uda: Template!Args, alias Template = Default, Args...))
-            {
-                return i;
-            }
-            else static if (i == numTraits - 1)
-            {
-                return -1;
-            }
+            @property static auto value() { return Alias(); }
+        }
+        else
+        {
+            alias value = Alias;
+        }
+    }
+
+    static struct Default(alias Alias)
+    {
+        static if (__traits(compiles, Alias()))
+        {
+            @property static auto value() { return Alias(); }
+        }
+        else
+        {
+            alias value = Alias;
         }
     }
 }
@@ -654,14 +754,23 @@ public template getUDADefaultOrNothing(attributes...)
 
     template EnumTest()
     {
+        enum EnumTest = attributes[udaIndex!(This.Default, attributes)].value;
+    }
+
+    template EnumTestDeprecated()
+    {
         enum EnumTest = attributes[udaIndex!(Default, attributes)].value;
     }
 
-    static if (udaIndex!(Default, attributes) == -1)
+    static if (udaIndex!(This.Default, attributes) == -1 && udaIndex!(Default, attributes) == -1)
     {
         enum getUDADefaultOrNothing = 0;
     }
     else static if (__traits(compiles, EnumTest!()))
+    {
+        enum getUDADefaultOrNothing = attributes[udaIndex!(This.Default, attributes)].value;
+    }
+    else static if (__traits(compiles, EnumTestDeprecated()))
     {
         enum getUDADefaultOrNothing = attributes[udaIndex!(Default, attributes)].value;
     }
@@ -669,7 +778,14 @@ public template getUDADefaultOrNothing(attributes...)
     {
         @property static auto getUDADefaultOrNothing()
         {
-            return attributes[udaIndex!(Default, attributes)].value;
+            static if (udaIndex!(This.Default, attributes) != -1)
+            {
+                return attributes[udaIndex!(This.Default, attributes)].value;
+            }
+            else
+            {
+                return attributes[udaIndex!(Default, attributes)].value;
+            }
         }
     }
 }

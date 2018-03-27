@@ -76,17 +76,22 @@ When a check fails, the value of the field will be unchanged.
 A constructor is generated that takes one parameter for every field in the class. The parameters are in the same order
 as the fields. The constructor is `public` by default.
 
-Mark a field with `@Default!value` to provide a default value
+- **@(This.Default):** Use `Default!value` to provide a default value
 for the field's parameter in the constructor call. If the value is only valid at runtime, use
-`@Default!(() => value)`.
+`Default!(() => value)`.
+- **@(This.Init):** Use `Init!value` to provide an initialization value for the field.
+Compared to `Default`, the field is not included in the parameter list at all.
+If the value depends on another field, use `Init!(self => ...)` to access `this`
+as `self`.
+- **@(This.Exclude):** Exclude the field from the generated constructor.
+
+In order, first all parameters are assigned, then the super constructor is called, then `Init` are assigned.
 
 As with accessors, arrays passed to the constructor are `dup`ed, even when wrapped in Nullable.
 
 If the superclass also has a *boilerplate-generated* constructor, the fields of that constructor are
 also included. In that case, depending on what fields have default values (implicit) or not (explicit),
 the order of arguments is "parent's explicit, child's explicit, child's implicit, parent's implicit."
-
-A field can be tagged with `@(This.Exclude)` to exclude it from the generated constructor.
 
 The following attributes can be applied to the whole structure:
 
