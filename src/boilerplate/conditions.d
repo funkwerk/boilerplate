@@ -221,6 +221,26 @@ unittest
     (new Class(float.init.nullable)).shouldThrow!AssertError;
 }
 
+/++
+Conditions can be applied to static attributes, generating static invariants.
++/
+@("does not allow invariants on static fields")
+unittest
+{
+    import std.typecons : Nullable, nullable;
+
+    static assert(!__traits(compiles, ()
+    {
+        class Class
+        {
+            @NonNull
+            private static Object obj;
+
+            mixin(GenerateInvariants);
+        }
+    }), "invariant on static field compiled when it shouldn't");
+}
+
 mixin template GenerateInvariantsTemplate()
 {
     private static string generateInvariantsImpl()
@@ -231,7 +251,8 @@ mixin template GenerateInvariantsTemplate()
         }
 
         import boilerplate.conditions : IsConditionAttribute, generateChecksForAttributes;
-        import boilerplate.util : GenNormalMemberTuple;
+        import boilerplate.util : GenNormalMemberTuple, isStatic;
+        import std.format : format;
         import std.meta : StdMetaFilter = Filter;
 
         string result = null;
@@ -255,11 +276,18 @@ mixin template GenerateInvariantsTemplate()
         {
             mixin(`alias symbol = this.` ~ member ~ `;`);
 
+            alias ConditionAttributes = StdMetaFilter!(IsConditionAttribute, __traits(getAttributes, symbol));
+
+            static if (mixin(isStatic(member)) && ConditionAttributes.length > 0)
+            {
+                result ~= format!(`static assert(false, `
+                    ~ `"Cannot add constraint on static field %s: no support for static invariants");`
+                )(member);
+            }
+
             static if (__traits(compiles, typeof(symbol).init))
             {
-                result ~= generateChecksForAttributes!(typeof(symbol),
-                        StdMetaFilter!(IsConditionAttribute, __traits(getAttributes, symbol)))
-                    (`this.` ~ member);
+                result ~= generateChecksForAttributes!(typeof(symbol), ConditionAttributes)(`this.` ~ member);
             }
         }
 
