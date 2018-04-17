@@ -517,7 +517,7 @@ mixin template GenerateThisTemplate()
 
             bool includeMember = false;
 
-            enum isNullable = mixin(format!`is(%s: Template!Args, alias Template = Nullable, Args...)`(memberTypes[i]));
+            enum isNullable = mixin(format!`is(%s: Nullable!Args, Args...)`(memberTypes[i]));
 
             static if (!isNullable)
             {

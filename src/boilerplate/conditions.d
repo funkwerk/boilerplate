@@ -241,6 +241,29 @@ unittest
     }), "invariant on static field compiled when it shouldn't");
 }
 
+@("works with classes inheriting from templates")
+unittest
+{
+    interface I(T)
+    {
+    }
+
+    interface K(T)
+    {
+    }
+
+    class C : I!ubyte, K!ubyte
+    {
+    }
+
+    class S
+    {
+        C c;
+
+        mixin(GenerateInvariants);
+    }
+}
+
 mixin template GenerateInvariantsTemplate()
 {
     private static string generateInvariantsImpl()
@@ -308,7 +331,7 @@ public string generateChecksForAttributes(T, Attributes...)(string member_expres
     import std.traits : ConstOf, isAssociativeArray;
     import std.typecons : Nullable;
 
-    enum isNullable = is(T: Template!Args, alias Template = Nullable, Args...);
+    enum isNullable = is(T: Nullable!Args, Args...);
 
     static if (isNullable)
     {

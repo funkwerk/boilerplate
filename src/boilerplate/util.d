@@ -149,7 +149,7 @@ template udaIndex(alias attr, attributes...)
 
                 static if (__traits(isTemplate, attr))
                 {
-                    static if (is(attrib: Template!Args, alias Template = attr, Args...))
+                    static if (is(attrib: attr!Args, Args...))
                     {
                         return i;
                     }
@@ -242,7 +242,7 @@ void sinkWrite(T)(scope void delegate(const(char)[]) sink, ref bool comma, strin
 
     alias PlainT = typeof(cast() arg);
 
-    enum isNullable = is(PlainT: Template!Args, alias Template = Nullable, Args...);
+    enum isNullable = is(PlainT: Nullable!Args, Args...);
 
     static if (isNullable)
     {
