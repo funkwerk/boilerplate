@@ -905,8 +905,8 @@ nothrow pure @safe unittest
     }
 }
 
-@("generates static properties for static members")
-unittest
+@("generates safe static properties for static members")
+@safe unittest
 {
     class MyStaticTest
     {
@@ -919,7 +919,7 @@ unittest
     assert(MyStaticTest.stuff == 8);
 }
 
-unittest
+@safe unittest
 {
     struct S
     {
