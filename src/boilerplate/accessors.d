@@ -47,7 +47,7 @@ mixin template GenerateFieldAccessorMethods()
         import boilerplate.accessors : Read, ConstRead, RefRead, Write,
             GenerateReader, GenerateConstReader, GenerateRefReader, GenerateWriter;
 
-        import boilerplate.util : GenNormalMemberTuple, isStatic, udaIndex;
+        import boilerplate.util : GenNormalMemberTuple, isStatic, isUnsafe, udaIndex;
 
         string result = "";
 
@@ -62,10 +62,13 @@ mixin template GenerateFieldAccessorMethods()
             // synchronized without lock contention is basically free, so always do it
             // TODO enable when https://issues.dlang.org/show_bug.cgi?id=18504 is fixed
             enum synchronize = false && is(typeof(field) == class);
+            enum fieldIsStatic = mixin(name.isStatic);
+            enum fieldIsUnsafe = mixin(name.isUnsafe);
 
             static if (udaIndex!(Read, __traits(getAttributes, field)) != -1)
             {
-                enum string readerDecl = GenerateReader!(typeof(field))(name, mixin(name.isStatic), synchronize);
+                enum string readerDecl = GenerateReader!(typeof(field))(
+                    name, fieldIsStatic, fieldIsUnsafe, synchronize);
 
                 debug (accessors) pragma(msg, readerDecl);
                 result ~= readerDecl;
@@ -76,7 +79,7 @@ mixin template GenerateFieldAccessorMethods()
                 result ~= `pragma(msg, "Deprecation! RefRead on ` ~ typeof(this).stringof ~ `.` ~ name
                     ~ ` makes a private field effectively public, defeating the point.");`;
 
-                enum string refReaderDecl = GenerateRefReader!(typeof(field))(name, mixin(name.isStatic));
+                enum string refReaderDecl = GenerateRefReader!(typeof(field))(name, fieldIsStatic);
 
                 debug (accessors) pragma(msg, refReaderDecl);
                 result ~= refReaderDecl;
@@ -85,7 +88,7 @@ mixin template GenerateFieldAccessorMethods()
             static if (udaIndex!(ConstRead, __traits(getAttributes, field)) != -1)
             {
                 enum string constReaderDecl = GenerateConstReader!(typeof(field))
-                    (name, mixin(name.isStatic), synchronize);
+                    (name, fieldIsStatic, synchronize);
 
                 debug (accessors) pragma(msg, constReaderDecl);
                 result ~= constReaderDecl;
@@ -94,7 +97,7 @@ mixin template GenerateFieldAccessorMethods()
             static if (udaIndex!(Write, __traits(getAttributes, field)) != -1)
             {
                 enum string writerDecl = GenerateWriter!(typeof(field), __traits(getAttributes, field))
-                    (name, fieldCode, mixin(name.isStatic), synchronize);
+                    (name, fieldCode, fieldIsStatic, fieldIsUnsafe, synchronize);
 
                 debug (accessors) pragma(msg, writerDecl);
                 result ~= writerDecl;
@@ -110,7 +113,7 @@ string getModifiers(bool isStatic)
     return isStatic ? " static" : "";
 }
 
-uint filterAttributes(T)(bool isStatic, FilterMode mode)
+uint filterAttributes(T)(bool isStatic, bool isUnsafe, FilterMode mode)
 {
     import boilerplate.util : needToDup;
 
@@ -135,6 +138,10 @@ uint filterAttributes(T)(bool isStatic, FilterMode mode)
     {
         attributes &= ~FunctionAttribute.pure_;
     }
+    if (isUnsafe)
+    {
+        attributes &= ~FunctionAttribute.safe;
+    }
     return attributes;
 }
 
@@ -144,7 +151,7 @@ enum FilterMode
     Writer,
 }
 
-string GenerateReader(T)(string name, bool fieldIsStatic, bool synchronize)
+string GenerateReader(T)(string name, bool fieldIsStatic, bool fieldIsUnsafe, bool synchronize)
 {
     import boilerplate.util : needToDup;
     import std.string : format;
@@ -156,7 +163,7 @@ string GenerateReader(T)(string name, bool fieldIsStatic, bool synchronize)
     enum needToDupField = needToDup!T;
 
     uint attributes = inferAttributes!(T, "__postblit") &
-        filterAttributes!T(fieldIsStatic, FilterMode.Reader);
+        filterAttributes!T(fieldIsStatic, fieldIsUnsafe, FilterMode.Reader);
 
     string attributesString = generateAttributeString(attributes);
 
@@ -208,16 +215,16 @@ string GenerateReader(T)(string name, bool fieldIsStatic, bool synchronize)
     int[] intArrayValue;
     const string constStringValue;
 
-    static assert(GenerateReader!int("foo", true, false) ==
+    static assert(GenerateReader!int("foo", true, false, false) ==
         "public static final @property auto foo() " ~
         "@nogc nothrow @safe { return this.foo; }");
-    static assert(GenerateReader!string("foo", true, false) ==
+    static assert(GenerateReader!string("foo", true, false, false) ==
         "public static final @property auto foo() " ~
         "@nogc nothrow @safe { return this.foo; }");
-    static assert(GenerateReader!(int[])("foo", true, false) ==
+    static assert(GenerateReader!(int[])("foo", true, false, false) ==
         "public static final @property auto foo() inout nothrow @safe "
       ~ "{ return typeof(this.foo).init ~ this.foo; }");
-    static assert(GenerateReader!(const string)("foo", true, false) ==
+    static assert(GenerateReader!(const string)("foo", true, false, false) ==
         "public static final @property auto foo() @nogc nothrow @safe "
       ~ "{ typeof(cast() this.foo) var = this.foo; return var; }");
 }
@@ -284,7 +291,7 @@ string GenerateConstReader(T)(string name, bool isStatic, bool synchronize)
         visibility, accessorName, attributesString, accessor_body);
 }
 
-string GenerateWriter(T, Attributes...)(string name, string fieldCode, bool isStatic, bool synchronize)
+string GenerateWriter(T, Attributes...)(string name, string fieldCode, bool isStatic, bool isUnsafe, bool synchronize)
 {
     import boilerplate.conditions : IsConditionAttribute, generateChecksForAttributes;
     import boilerplate.util : needToDup;
@@ -298,7 +305,7 @@ string GenerateWriter(T, Attributes...)(string name, string fieldCode, bool isSt
     enum visibility = getVisibility!(Write, __traits(getAttributes, example));
 
     uint attributes = defaultFunctionAttributes &
-        filterAttributes!T(isStatic, FilterMode.Writer) &
+        filterAttributes!T(isStatic, isUnsafe, FilterMode.Writer) &
         inferAssignAttributes!T &
         inferAttributes!(T, "__postblit") &
         inferAttributes!(T, "__dtor");
@@ -331,13 +338,13 @@ string GenerateWriter(T, Attributes...)(string name, string fieldCode, bool isSt
 @("generates writers as expected")
 @nogc nothrow pure @safe unittest
 {
-    static assert(GenerateWriter!int("foo", "integerValue", true, false) ==
+    static assert(GenerateWriter!int("foo", "integerValue", true, false, false) ==
         "public static final @property void foo(typeof(integerValue) foo) " ~
         "@nogc nothrow @safe { this.foo = foo; }");
-    static assert(GenerateWriter!string("foo", "stringValue", true, false) ==
+    static assert(GenerateWriter!string("foo", "stringValue", true, false, false) ==
         "public static final @property void foo(typeof(stringValue) foo) " ~
         "@nogc nothrow @safe { this.foo = foo; }");
-    static assert(GenerateWriter!(int[])("foo", "intArrayValue", true, false) ==
+    static assert(GenerateWriter!(int[])("foo", "intArrayValue", true, false, false) ==
         "public static final @property void foo(typeof(intArrayValue) foo) " ~
         "nothrow @safe { this.foo = foo.dup; }");
 }
@@ -928,6 +935,20 @@ unittest
     assert(S.foo == 8);
     static assert(is(typeof({ S.foo = 8; })));
     assert(S.bar == 6);
+}
+
+@("does not set @safe on accessors for static __gshared members")
+unittest
+{
+    class Test
+    {
+        @Read
+        static __gshared int stuff_ = 8;
+
+        mixin(GenerateFieldAccessors);
+    }
+
+    assert(Test.stuff == 8);
 }
 
 unittest

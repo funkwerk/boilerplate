@@ -199,6 +199,11 @@ string isStatic(string field)
       ~ ` && __traits(compiles, &this.` ~ field ~ `)`;
 }
 
+string isUnsafe(string field)
+{
+    return isStatic(field) ~ ` && !__traits(compiles, () @safe { return this.` ~ field ~ `; })`;
+}
+
 // a stable, simple O(n) sort optimal for a small number of sort keys
 T[] bucketSort(T)(T[] inputArray, int delegate(T) rankfn)
 {
