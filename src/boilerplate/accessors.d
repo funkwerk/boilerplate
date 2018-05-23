@@ -188,23 +188,15 @@ string GenerateReader(T)(string name, bool fieldIsStatic, bool fieldIsUnsafe, bo
         accessor_body = format!`synchronized (this) { %s} `(accessor_body);
     }
 
-    static if (needToDupField)
-    {
-        auto modifiers = getModifiers(fieldIsStatic);
+    auto modifiers = getModifiers(fieldIsStatic);
 
-        return format!("%s%s final @property auto %s() inout %s{ %s }")
-                    (visibility, modifiers, accessorName, attributesString, accessor_body);
-    }
-    else if (fieldIsStatic)
+    if (!fieldIsStatic)
     {
-        return format!"%s static final @property auto %s() %s{ %s }"
-            (visibility, accessorName, attributesString, accessor_body);
+        attributesString ~= "inout ";
     }
-    else
-    {
-        return format!"%s final @property auto %s() inout %s{ %s }"
-            (visibility, accessorName, attributesString, accessor_body);
-    }
+
+    return format!("%s%s final @property auto %s() %s{ %s }")
+                (visibility, modifiers, accessorName, attributesString, accessor_body);
 }
 
 @("generates readers as expected")
@@ -222,7 +214,7 @@ string GenerateReader(T)(string name, bool fieldIsStatic, bool fieldIsUnsafe, bo
         "public static final @property auto foo() " ~
         "@nogc nothrow @safe { return this.foo; }");
     static assert(GenerateReader!(int[])("foo", true, false, false) ==
-        "public static final @property auto foo() inout nothrow @safe "
+        "public static final @property auto foo() nothrow @safe "
       ~ "{ return typeof(this.foo).init ~ this.foo; }");
     static assert(GenerateReader!(const string)("foo", true, false, false) ==
         "public static final @property auto foo() @nogc nothrow @safe "
@@ -949,6 +941,18 @@ unittest
     }
 
     assert(Test.stuff == 8);
+}
+
+@("does not set inout on accessors for static fields")
+unittest
+{
+    class Test
+    {
+        @Read
+        __gshared Object[] stuff_;
+
+        mixin(GenerateFieldAccessors);
+    }
 }
 
 unittest
