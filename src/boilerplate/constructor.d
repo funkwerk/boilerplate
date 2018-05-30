@@ -387,26 +387,6 @@ unittest
     obj.field2.shouldEqual(10);
 }
 
-///
-@("still supports deprecated default attribute")
-unittest
-{
-    class Class
-    {
-        @Default!5
-        int value = 5;
-
-        mixin(GenerateThis);
-    }
-
-    auto obj1 = new Class();
-
-    obj1.value.shouldEqual(5);
-
-    auto obj2 = new Class(6);
-
-    obj2.value.shouldEqual(6);
-}
 import std.string : format;
 
 enum GetSuperTypeAsString_(size_t Index) = format!`typeof(super).GeneratedConstructorTypes_[%s]`(Index);
@@ -461,8 +441,7 @@ mixin template GenerateThisTemplate()
         }
 
         enum MemberUseDefault(string Member)
-            = mixin(format!(`udaIndex!(This.Default, __traits(getAttributes, this.%s)) != -1`~
-                `|| udaIndex!(Default, __traits(getAttributes, this.%s)) != -1`)(Member, Member));
+            = mixin(format!(`udaIndex!(This.Default, __traits(getAttributes, this.%s)) != -1`)(Member));
 
         static if (is(typeof(typeof(super).GeneratedConstructorFields_)))
         {
@@ -694,19 +673,6 @@ mixin template GenerateThisTemplate()
     }
 }
 
-deprecated("Please use This.Default")
-struct Default(alias Alias)
-{
-    static if (__traits(compiles, Alias()))
-    {
-        @property static auto value() { return Alias(); }
-    }
-    else
-    {
-        alias value = Alias;
-    }
-}
-
 enum ThisEnum
 {
     Private,
@@ -757,12 +723,7 @@ public template getUDADefaultOrNothing(attributes...)
         enum EnumTest = attributes[udaIndex!(This.Default, attributes)].value;
     }
 
-    template EnumTestDeprecated()
-    {
-        enum EnumTest = attributes[udaIndex!(Default, attributes)].value;
-    }
-
-    static if (udaIndex!(This.Default, attributes) == -1 && udaIndex!(Default, attributes) == -1)
+    static if (udaIndex!(This.Default, attributes) == -1)
     {
         enum getUDADefaultOrNothing = 0;
     }
@@ -770,22 +731,11 @@ public template getUDADefaultOrNothing(attributes...)
     {
         enum getUDADefaultOrNothing = attributes[udaIndex!(This.Default, attributes)].value;
     }
-    else static if (__traits(compiles, EnumTestDeprecated()))
-    {
-        enum getUDADefaultOrNothing = attributes[udaIndex!(Default, attributes)].value;
-    }
     else
     {
         @property static auto getUDADefaultOrNothing()
         {
-            static if (udaIndex!(This.Default, attributes) != -1)
-            {
-                return attributes[udaIndex!(This.Default, attributes)].value;
-            }
-            else
-            {
-                return attributes[udaIndex!(Default, attributes)].value;
-            }
+            return attributes[udaIndex!(This.Default, attributes)].value;
         }
     }
 }
