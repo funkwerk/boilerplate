@@ -416,11 +416,11 @@ unittest
 
 import std.string : format;
 
-enum GetSuperTypeAsString_(size_t Index) = format!`typeof(super).GeneratedConstructorTypes_[%s]`(Index);
+enum GetSuperTypeAsString_(size_t Index) = format!`typeof(super).ConstructorInfo.Types[%s]`(Index);
 
 enum GetMemberTypeAsString_(string Member) = format!`typeof(this.%s)`(Member);
 
-enum SuperDefault_(size_t Index) = format!`typeof(super).GeneratedConstructorDefaults_[%s]`(Index);
+enum SuperDefault_(size_t Index) = format!`typeof(super).ConstructorInfo.defaults[%s]`(Index);
 
 enum MemberDefault_(string Member) =
     format!`getUDADefaultOrNothing!(__traits(getAttributes, this.%s))`(Member);
@@ -436,7 +436,7 @@ mixin template GenerateThisTemplate()
 
         import boilerplate.constructor : GetMemberTypeAsString_, GetSuperTypeAsString_,
             MemberDefault_, SuperDefault_, This;
-        import boilerplate.util : GenNormalMemberTuple, bucketSort, needToDup, udaIndex;
+        import boilerplate.util : GenNormalMemberTuple, bucketSort, needToDup, reorder, udaIndex;
         import std.algorithm : canFind, filter, map;
         import std.meta : Alias, aliasSeqOf, staticMap;
         import std.range : array, drop, iota;
@@ -473,14 +473,14 @@ mixin template GenerateThisTemplate()
 
         string[] attributes = ["pure", "nothrow", "@safe", "@nogc"];
 
-        static if (is(typeof(typeof(super).GeneratedConstructorFields_)))
+        static if (is(typeof(typeof(super).ConstructorInfo)))
         {
-            enum argsPassedToSuper = typeof(super).GeneratedConstructorFields_.length;
-            enum members = typeof(super).GeneratedConstructorFields_ ~ [NormalMemberTuple];
-            enum useDefaults = typeof(super).GeneratedConstructorUseDefaults_
+            enum argsPassedToSuper = typeof(super).ConstructorInfo.fields.length;
+            enum members = typeof(super).ConstructorInfo.fields ~ [NormalMemberTuple];
+            enum useDefaults = typeof(super).ConstructorInfo.useDefaults
                 ~ [staticMap!(MemberUseDefault, NormalMemberTuple)];
             enum CombinedArray(alias SuperPred, alias MemberPred) = [
-                staticMap!(SuperPred, aliasSeqOf!(typeof(super).GeneratedConstructorTypes_.length.iota)),
+                staticMap!(SuperPred, aliasSeqOf!(typeof(super).ConstructorInfo.Types.length.iota)),
                 staticMap!(MemberPred, NormalMemberTuple)
             ];
             attributes = typeof(super).GeneratedConstructorAttributes_;
@@ -507,11 +507,11 @@ mixin template GenerateThisTemplate()
 
         bool[] passAsConst;
         string[] fields;
-        string[] quotedFields;
         string[] args;
         string[] argexprs;
         string[] defaultAssignments;
-        string[] useDefaultsStr;
+        bool[] fieldUseDefault;
+        string[] fieldDefault;
         string[] types;
         string[] directInitFields;
         int[] directInitIndex;
@@ -632,11 +632,11 @@ mixin template GenerateThisTemplate()
 
             passAsConst ~= passExprAsConst;
             fields ~= member;
-            quotedFields ~= `"` ~ member ~ `"`;
             args ~= paramName;
             argexprs ~= argexpr;
+            fieldUseDefault ~= useDefaults[i];
+            fieldDefault ~= defaults[i];
             defaultAssignments ~= useDefaults[i] ? (` = ` ~ defaults[i]) : ``;
-            useDefaultsStr ~= useDefaults[i] ? `true` : `false`;
             types ~= passExprAsConst ? (`const ` ~ memberTypes[i]) : memberTypes[i];
         }
 
@@ -649,7 +649,9 @@ mixin template GenerateThisTemplate()
             return useDefaults[i] * 2 + (useDefaults[i] == fieldOfParent);
         }
 
-        foreach (k, i; fields.length.iota.array.bucketSort(&establishParameterRank))
+        auto constructorFieldOrder = fields.length.iota.array.bucketSort(&establishParameterRank);
+
+        foreach (k, i; constructorFieldOrder)
         {
             auto type = types[i];
 
@@ -663,7 +665,7 @@ mixin template GenerateThisTemplate()
 
         result ~= format!`) %-(%s %) {`(attributes);
 
-        static if (is(typeof(typeof(super).GeneratedConstructorFields_)))
+        static if (is(typeof(typeof(super).ConstructorInfo)))
         {
             result ~= `super(` ~ args[0 .. argsPassedToSuper].join(", ") ~ `);`;
         }
@@ -695,21 +697,16 @@ mixin template GenerateThisTemplate()
         static if (!is(typeof(this) == struct))
         {
             // don't emit inheritance info for structs
-            result ~= `protected static enum string[] GeneratedConstructorFields_ = [`
-                ~ quotedFields.join(`, `)
-                ~ `];`;
+            result ~= format!`
+                public static alias ConstructorInfo =
+                    saveConstructorInfo!(%s, %s, %-(%s, %)).withDefaults!(%-(%s, %));`
+            (
+                fields.reorder(constructorFieldOrder),
+                fieldUseDefault.reorder(constructorFieldOrder),
+                types.reorder(constructorFieldOrder),
+                fieldDefault.reorder(constructorFieldOrder)
+            );
 
-            result ~= `protected static alias GeneratedConstructorTypes_ = AliasSeq!(`
-                ~ types.join(`, `)
-                ~ `);`;
-
-            result ~= `protected static enum bool[] GeneratedConstructorUseDefaults_ = [`
-                ~ useDefaultsStr.join(`, `)
-                ~ `];`;
-
-            result ~= `protected static alias GeneratedConstructorDefaults_ = AliasSeq!(`
-                ~ defaults.join(`, `)
-                ~ `);`;
 
             result ~= `protected static enum string[] GeneratedConstructorAttributes_ = [`
                 ~ attributes.map!(a => `"` ~ a ~ `"`).join(`, `)
@@ -725,6 +722,21 @@ mixin template GenerateThisTemplate()
         }
 
         return result;
+    }
+}
+
+public template saveConstructorInfo(string[] fields_, bool[] useDefaults_, Types_...)
+{
+    template withDefaults(defaults_...)
+    {
+        static assert(fields_.length == useDefaults.length);
+        static assert(fields_.length == Types.length);
+        static assert(fields_.length == defaults.length);
+
+        public enum fields = fields_;
+        public enum useDefaults = useDefaults_;
+        public alias Types = Types_;
+        public alias defaults = defaults_;
     }
 }
 

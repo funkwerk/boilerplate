@@ -357,69 +357,27 @@ unittest
         .shouldEqual("Hello 5 World 35!");
 }
 
-
-template evenMemberIsString(T...)
+public T[] reorder(T)(T[] source, size_t[] newOrder)
+in
 {
-    enum evenMemberIsString(int i) = isSomeString!(T[i * 2]);
+    import std.algorithm : sort;
+    import std.range : array, iota;
+
+    // newOrder must be a permutation of source indices
+    assert(newOrder.dup.sort.array == source.length.iota.array);
+}
+body
+{
+    import std.algorithm : map;
+    import std.range : array;
+
+    return newOrder.map!(i => source[i]).array;
 }
 
-public string formatNamed(T...)(string text, T arguments)
-// even length, argument[0], [2], [4]... are strings
-if (T.length % 2 == 0 && allSatisfy!(evenMemberIsString!T, aliasSeqOf!((T.length / 2).iota)))
-{
-    import std.algorithm : findSplit;
-    import std.array : empty;
-    import std.exception : enforce;
-    import std.format : format;
-
-    string replaceNamedArg(string match)
-    {
-        import std.format : format;
-
-        static foreach (i; (T.length / 2).iota)
-        {{
-            import std.conv : to;
-
-            auto key = arguments[i * 2 + 0];
-            auto value = arguments[i * 2 + 1];
-
-            if (match == key)
-            {
-                return value.to!string;
-            }
-        }}
-
-        assert(false, format!"Unknown format key: '%s'"(match).dup);
-    }
-
-    string result;
-    string remainder = text;
-
-    while (true)
-    {
-        auto splitLeft = remainder.findSplit("%(");
-
-        if (splitLeft[1].empty)
-        {
-            break;
-        }
-
-        auto splitRight = splitLeft[2].findSplit(")");
-
-        enforce(!splitRight[1].empty, format!"Closing paren not found in '%s'"(remainder));
-        remainder = splitRight[2];
-        result ~= splitLeft[0] ~ replaceNamedArg(splitRight[0]);
-    }
-
-    return result ~ remainder;
-}
-
-///
-@("formatNamed replaces named keys with given values")
+@("reorder returns reordered array")
 unittest
 {
     import unit_threaded.should;
 
-    "Hello %(second) World %(first)%(second)!".formatNamed("first", 3, "second", 5)
-        .shouldEqual("Hello 5 World 35!");
+    [1, 2, 3].reorder([0, 2, 1]).shouldEqual([1, 3, 2]);
 }
