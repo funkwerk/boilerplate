@@ -287,6 +287,7 @@ string GenerateWriter(T, Attributes...)(string name, string fieldCode, bool isSt
 {
     import boilerplate.conditions : IsConditionAttribute, generateChecksForAttributes;
     import boilerplate.util : needToDup;
+    import std.algorithm : canFind;
     import std.meta : StdMetaFilter = Filter;
     import std.string : format;
 
@@ -310,6 +311,12 @@ string GenerateWriter(T, Attributes...)(string name, string fieldCode, bool isSt
         precondition = format!`in { import std.format : format; import std.array : empty; %s } body `(checks);
         attributes &= ~FunctionAttribute.nogc;
         attributes &= ~FunctionAttribute.nothrow_;
+        // format() is neither pure nor safe
+        if (checks.canFind("format"))
+        {
+            attributes &= ~FunctionAttribute.pure_;
+            attributes &= ~FunctionAttribute.safe;
+        }
     }
 
     auto attributesString = generateAttributeString(attributes);
@@ -1001,23 +1008,28 @@ unittest
 @("generates invariant checks via precondition for writers")
 unittest
 {
-    import boilerplate.conditions : NonNull;
+    import boilerplate.conditions : AllNonNull;
     import core.exception : AssertError;
     import std.algorithm : canFind;
     import std.conv : to;
     import unit_threaded.should : shouldThrow;
 
-    struct Thing
+    class Thing
     {
-        @Write @NonNull
-        Object object_;
+        @Write @AllNonNull
+        Object[] objects_;
+
+        this(Object[] objects)
+        {
+            this.objects_ = objects.dup;
+        }
 
         mixin(GenerateFieldAccessors);
     }
 
-    auto thing = Thing(new Object);
+    auto thing = new Thing([new Object]);
 
-    auto error = ({ thing.object = null; })().shouldThrow!AssertError;
+    auto error = ({ thing.objects = [null]; })().shouldThrow!AssertError;
 
     assert(error.to!string.canFind("in precondition"));
 }
