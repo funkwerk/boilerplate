@@ -387,6 +387,32 @@ unittest
     obj.field2.shouldEqual(10);
 }
 
+///
+@("can initialize fields with allocated types")
+unittest
+{
+    class Class1
+    {
+        @(This.Init!(self => new Object))
+        Object object;
+
+        mixin(GenerateThis);
+    }
+
+    class Class2
+    {
+        @(This.Init!(() => new Object))
+        Object object;
+
+        mixin(GenerateThis);
+    }
+
+    class Class3 : Class2
+    {
+        mixin(GenerateThis);
+    }
+}
+
 import std.string : format;
 
 enum GetSuperTypeAsString_(size_t Index) = format!`typeof(super).GeneratedConstructorTypes_[%s]`(Index);
@@ -410,7 +436,8 @@ mixin template GenerateThisTemplate()
         import boilerplate.constructor : GetMemberTypeAsString_, GetSuperTypeAsString_,
             MemberDefault_, SuperDefault_, This;
         import boilerplate.util : GenNormalMemberTuple, bucketSort, needToDup, udaIndex;
-        import std.meta : aliasSeqOf, staticMap;
+        import std.algorithm : canFind, filter, map;
+        import std.meta : Alias, aliasSeqOf, staticMap;
         import std.range : array, drop, iota;
         import std.string : endsWith, format, join;
         import std.typecons : Nullable;
@@ -443,6 +470,8 @@ mixin template GenerateThisTemplate()
         enum MemberUseDefault(string Member)
             = mixin(format!(`udaIndex!(This.Default, __traits(getAttributes, this.%s)) != -1`)(Member));
 
+        string[] attributes = ["pure", "nothrow", "@safe", "@nogc"];
+
         static if (is(typeof(typeof(super).GeneratedConstructorFields_)))
         {
             enum argsPassedToSuper = typeof(super).GeneratedConstructorFields_.length;
@@ -453,6 +482,7 @@ mixin template GenerateThisTemplate()
                 staticMap!(SuperPred, aliasSeqOf!(typeof(super).GeneratedConstructorTypes_.length.iota)),
                 staticMap!(MemberPred, NormalMemberTuple)
             ];
+            attributes = typeof(super).GeneratedConstructorAttributes_;
         }
         else
         {
@@ -471,8 +501,8 @@ mixin template GenerateThisTemplate()
             }
         }
 
-        enum memberTypes = CombinedArray!(GetSuperTypeAsString_, GetMemberTypeAsString_);
-        enum defaults = CombinedArray!(SuperDefault_, MemberDefault_);
+        enum string[] memberTypes = CombinedArray!(GetSuperTypeAsString_, GetMemberTypeAsString_);
+        enum string[] defaults = CombinedArray!(SuperDefault_, MemberDefault_);
 
         bool[] passAsConst;
         string[] fields;
@@ -485,8 +515,6 @@ mixin template GenerateThisTemplate()
         string[] directInitFields;
         int[] directInitIndex;
         bool[] directInitUseSelf;
-
-        bool anyDups = false;
 
         foreach (i; aliasSeqOf!(members.length.iota))
         {
@@ -535,12 +563,34 @@ mixin template GenerateThisTemplate()
                 static if (udaIndex!(This.Init, __traits(getAttributes, symbol)) != -1)
                 {
                     enum udaFieldIndex = udaIndex!(This.Init, __traits(getAttributes, symbol));
+                    alias initArg = Alias!(__traits(getAttributes, symbol)[udaFieldIndex].value);
+                    enum lambdaWithSelf = __traits(compiles, initArg(typeof(this).init));
+                    enum nakedLambda = __traits(compiles, initArg());
 
                     directInitFields ~= member;
                     directInitIndex ~= udaFieldIndex;
-                    directInitUseSelf ~= __traits(compiles,
-                        __traits(getAttributes, symbol)[udaFieldIndex].value(typeof(this).init));
+                    directInitUseSelf ~= lambdaWithSelf;
                     includeMember = false;
+
+                    static if (lambdaWithSelf)
+                    {
+                        static if (__traits(compiles, initArg!(typeof(this))))
+                        {
+                            enum lambdaAttributes = [__traits(getFunctionAttributes, initArg!(typeof(this)))];
+                        }
+                        else
+                        {
+                            enum lambdaAttributes = [__traits(getFunctionAttributes, initArg)];
+                        }
+
+                        attributes = attributes.filter!(a => lambdaAttributes.canFind(a)).array;
+                    }
+                    else static if (nakedLambda)
+                    {
+                        enum lambdaAttributes = [__traits(getFunctionAttributes, initArg)];
+
+                        attributes = attributes.filter!(a => lambdaAttributes.canFind(a)).array;
+                    }
                 }
 
                 static if (udaIndex!(This.Exclude, __traits(getAttributes, symbol)) != -1)
@@ -566,7 +616,7 @@ mixin template GenerateThisTemplate()
 
             if (dupExpr)
             {
-                anyDups = true;
+                attributes = attributes.filter!(a => a != "@nogc").array;
 
                 static if (isNullable)
                 {
@@ -610,7 +660,7 @@ mixin template GenerateThisTemplate()
             result ~= type ~ ` ` ~ args[i] ~ defaultAssignments[i];
         }
 
-        result ~= format!`) pure %snothrow @safe {`(anyDups ? `` : `@nogc `);
+        result ~= format!`) %-(%s %) {`(attributes);
 
         static if (is(typeof(typeof(super).GeneratedConstructorFields_)))
         {
@@ -659,6 +709,10 @@ mixin template GenerateThisTemplate()
             result ~= `protected static alias GeneratedConstructorDefaults_ = AliasSeq!(`
                 ~ defaults.join(`, `)
                 ~ `);`;
+
+            result ~= `protected static enum string[] GeneratedConstructorAttributes_ = [`
+                ~ attributes.map!(a => `"` ~ a ~ `"`).join(`, `)
+                ~ `];`;
         }
         else
         {
