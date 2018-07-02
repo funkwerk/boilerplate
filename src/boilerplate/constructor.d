@@ -16,6 +16,7 @@ public enum string GenerateThis = `
     import boilerplate.constructor:
         BuilderImpl, GenerateThisTemplate, Optional, getUDADefaultOrNothing, removeTrailingUnderlines;
     import boilerplate.util: formatNamed, udaIndex;
+    import std.algorithm : canFind;
     import std.meta : AliasSeq;
     import std.format : format;
     import std.string : replace;
@@ -1050,7 +1051,8 @@ public template getUDADefaultOrNothing(attributes...)
 
 public mixin template BuilderImpl(T)
 {
-    static if (!isNested!T && !__traits(isAbstractClass, T))
+    static if (!isNested!T && !__traits(isAbstractClass, T)
+        && !T.ConstructorInfo.fields.removeTrailingUnderlines.canFind("value"))
     {
         public static struct Builder
         {
