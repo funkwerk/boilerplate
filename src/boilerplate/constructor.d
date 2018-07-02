@@ -13,7 +13,8 @@ version(unittest)
 GenerateThis is a mixin string that automatically generates a this() function, customizable with UDA.
 +/
 public enum string GenerateThis = `
-    import boilerplate.constructor: BuilderImpl, GenerateThisTemplate, getUDADefaultOrNothing, removeTrailingUnderlines;
+    import boilerplate.constructor:
+        BuilderImpl, GenerateThisTemplate, Optional, getUDADefaultOrNothing, removeTrailingUnderlines;
     import boilerplate.util: formatNamed, udaIndex;
     import std.meta : AliasSeq;
     import std.format : format;
@@ -617,8 +618,6 @@ unittest
     }
 
     auto value = Struct2.build!((builder) {
-        import std.typecons : Nullable;
-
         static assert(is(typeof(builder.struct1) == Struct1.Builder));
 
         builder.struct1.a = 1;
@@ -666,6 +665,24 @@ unittest
     });
 
     value.shouldEqual(Struct2(1, 2, Struct1(3, 4)));
+}
+
+///
+@("builder supports const args")
+unittest
+{
+    struct Struct
+    {
+        const int a;
+
+        mixin(GenerateThis);
+    }
+
+    auto value = Struct.build!((builder) {
+        builder.a = 5;
+    });
+
+    value.shouldEqual(Struct(5));
 }
 
 import std.string : format;
@@ -1063,7 +1080,7 @@ public mixin template BuilderImpl(T)
                 }
                 else
                 {
-                    alias Type = Nullable!BaseType;
+                    alias Type = Optional!BaseType;
                     enum isBuilder = false;
                 }
             }
@@ -1184,12 +1201,13 @@ public mixin template BuilderImpl(T)
             do
             {
                 import std.algorithm : map;
-                import std.range : array;
+                import std.range : array, iota;
+                import std.traits : Unqual;
 
-                T.ConstructorInfo.Types args = T.ConstructorInfo.Types.init;
-
-                static foreach (i, builderField; builderFields)
+                auto getArg(int i)()
                 {
+                    enum builderField = builderFields[i];
+
                     mixin(formatNamed!q{
                         static if (BuilderFieldInfo!i.isBuilder)
                         {
@@ -1197,7 +1215,7 @@ public mixin template BuilderImpl(T)
                             {
                                 static if (T.ConstructorInfo.useDefaults[i])
                                 {
-                                    args[i] = T.ConstructorInfo.defaults[i];
+                                    return T.ConstructorInfo.defaults[i];
                                 }
                                 else
                                 {
@@ -1206,20 +1224,20 @@ public mixin template BuilderImpl(T)
                             }
                             else
                             {
-                                args[i] = this.%(builderField).build;
+                                return this.%(builderField).build;
                             }
                         }
                         else
                         {
                             if (!this.%(builderField).isNull)
                             {
-                                args[i] = this.%(builderField);
+                                return this.%(builderField).get;
                             }
                             else
                             {
                                 static if (T.ConstructorInfo.useDefaults[i])
                                 {
-                                    args[i] = T.ConstructorInfo.defaults[i];
+                                    return T.ConstructorInfo.defaults[i];
                                 }
                                 else
                                 {
@@ -1232,11 +1250,13 @@ public mixin template BuilderImpl(T)
 
                 static if (is(T == class))
                 {
-                    return new T(args);
+                    return mixin(format!q{new T(%-(%s, %))}(
+                        builderFields.length.iota.map!(i => format!`getArg!%s`(i)).array));
                 }
                 else
                 {
-                    return T(args);
+                    return mixin(format!q{T(%-(%s, %))}(
+                        builderFields.length.iota.map!(i => format!`getArg!%s`(i)).array));
                 }
             }
         }
@@ -1250,4 +1270,52 @@ public string removeTrailingUnderline(string name)
     import std.string : endsWith;
 
     return name.endsWith("_") ? name[0 .. $ - 1] : name;
+}
+
+// TODO replace with Nullable once pr 19037 is merged
+public struct Optional(T)
+{
+    import std.traits : Unqual;
+
+    private Unqual!T value = T.init;
+
+    private bool isNull_ = true;
+
+    public this(T value)
+    {
+        this.value = value;
+    }
+
+    public bool isNull() const
+    {
+        return this.isNull_;
+    }
+
+    public T get() const
+    in
+    {
+        assert(!isNull);
+    }
+    do
+    {
+        return this.value;
+    }
+
+    public void opAssign(const T value)
+    {
+        import std.algorithm : moveEmplace, move;
+
+        Unqual!T valueCopy = value;
+
+        if (this.isNull_)
+        {
+            moveEmplace(valueCopy, this.value);
+
+            this.isNull_ = false;
+        }
+        else
+        {
+            move(valueCopy, this.value);
+        }
+    }
 }
