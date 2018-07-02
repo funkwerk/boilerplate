@@ -1,5 +1,7 @@
 module boilerplate.constructor;
 
+import std.algorithm : map;
+import std.range : array;
 import std.typecons : Tuple;
 
 version(unittest)
@@ -11,10 +13,11 @@ version(unittest)
 GenerateThis is a mixin string that automatically generates a this() function, customizable with UDA.
 +/
 public enum string GenerateThis = `
-    import boilerplate.constructor: BuilderImpl, GenerateThisTemplate, getUDADefaultOrNothing, removeTrailingUnderline;
+    import boilerplate.constructor: BuilderImpl, GenerateThisTemplate, getUDADefaultOrNothing, removeTrailingUnderlines;
     import boilerplate.util: formatNamed, udaIndex;
     import std.meta : AliasSeq;
     import std.format : format;
+    import std.string : replace;
     import std.traits : isNested;
     import std.typecons : Nullable;
     mixin GenerateThisTemplate;
@@ -546,28 +549,6 @@ unittest
 }
 
 ///
-@("strips trailing underlines")
-unittest
-{
-    struct Struct
-    {
-        private int a_;
-
-        mixin(GenerateThis);
-    }
-
-    auto value = {
-        with (Struct.Builder())
-        {
-            a = 1;
-            return build;
-        }
-    }();
-
-    value.shouldEqual(Struct(1));
-}
-
-///
 @("Class.build creates builder and passes it, which is more compact")
 unittest
 {
@@ -593,6 +574,67 @@ unittest
         field1.shouldEqual(1);
         field2.shouldEqual(3);
         field3.shouldEqual(5);
+    }
+}
+
+///
+@("builder strips trailing underlines")
+unittest
+{
+    struct Struct
+    {
+        private int a_;
+
+        mixin(GenerateThis);
+    }
+
+    auto value = Struct.build!((builder) {
+        builder.a = 1;
+    });
+
+    value.shouldEqual(Struct(1));
+}
+
+///
+@("builder supports nested initialization")
+unittest
+{
+    struct Struct1
+    {
+        int a;
+        int b;
+
+        mixin(GenerateThis);
+    }
+
+    struct Struct2
+    {
+        int c;
+        Struct1 struct1;
+        int d;
+
+        mixin(GenerateThis);
+    }
+
+    auto value = Struct2.build!((builder) {
+        import std.typecons : Nullable;
+
+        static assert(is(typeof(builder.struct1) == Struct1.Builder));
+
+        builder.struct1.a = 1;
+        builder.struct1.b = 2;
+        builder.c = 3;
+        builder.d = 4;
+    });
+
+    static assert(is(typeof(value) == Struct2));
+
+    with (value)
+    {
+        struct1.a.shouldEqual(1);
+        struct1.b.shouldEqual(2);
+        c.shouldEqual(3);
+        d.shouldEqual(4);
     }
 }
 
@@ -985,38 +1027,72 @@ public mixin template BuilderImpl(T)
             return builder.build();
         }
 
+        enum builderFields = T.ConstructorInfo.fields.removeTrailingUnderlines;
+
         public static struct Builder
         {
             static assert(__traits(hasMember, T, "ConstructorInfo"));
 
-            static foreach (i, field; T.ConstructorInfo.fields)
+            private alias Info = Tuple!(string, "builderField");
+
+            template BuilderFieldInfo(int i)
             {
-                mixin(format!q{public Nullable!(T.ConstructorInfo.Types[i]) %s;}(field.removeTrailingUnderline));
+                alias BaseType = T.ConstructorInfo.Types[i];
+
+                static if (__traits(hasMember, BaseType, "Builder"))
+                {
+                    alias Type = BaseType.Builder;
+                    enum isBuilder = true;
+                }
+                else
+                {
+                    alias Type = Nullable!BaseType;
+                    enum isBuilder = false;
+                }
+            }
+
+            static foreach (i, builderField; builderFields)
+            {
+                mixin(formatNamed!q{public BuilderFieldInfo!i.Type %(builderField);}.values(Info(builderField)));
             }
 
             this(T value)
             {
-                static foreach (field; T.ConstructorInfo.fields)
+                static foreach (i, field; T.ConstructorInfo.fields)
                 {
-                    mixin(format!q{
-                        static if (__traits(compiles, value.%s))
+                    mixin(formatNamed!q{
+                        static if (__traits(compiles, value.%(valueField)))
                         {
-                            this.%s = value.%s;
+                            static if (BuilderFieldInfo!i.isBuilder)
+                            {
+                                this.%(builderField) = typeof(this.%(builderField))(value.%(valueField));
+                            }
+                            else
+                            {
+                                this.%(builderField) = value.%(valueField);
+                            }
                         }
-                    }(field, field.removeTrailingUnderline, field));
+                    }.values(Info(builderFields[i]) ~ Tuple!(string, "valueField")(field)));
                 }
             }
 
             this(Builder builder)
             {
-                static foreach (field; T.ConstructorInfo.fields)
+                static foreach (i, builderField; builderFields)
                 {
-                    mixin(format!q{
-                        if (!builder.%s.isNull)
+                    mixin(formatNamed!q{
+                        static if (BuilderFieldInfo!i.isBuilder)
                         {
-                            this.%s = builder.%s;
+                            this.%(builderField) = typeof(this.%(builderField))(builder.%(builderField));
                         }
-                    }(field.removeTrailingUnderline, field.removeTrailingUnderline, field.removeTrailingUnderline));
+                        else
+                        {
+                            if (!builder.%(builderField).isNull)
+                            {
+                                this.%(builderField) = builder.%(builderField);
+                            }
+                        }
+                    }.values(Info(builderField)));
                 }
             }
 
@@ -1025,19 +1101,60 @@ public mixin template BuilderImpl(T)
                 return getError().isNull;
             }
 
+            bool allNull() const
+            {
+                static foreach (i, builderField; builderFields)
+                {
+                    mixin(formatNamed!q{
+                        static if (BuilderFieldInfo!i.isBuilder)
+                        {
+                            if (!this.%(builderField).allNull)
+                            {
+                                return false;
+                            }
+                        }
+                        else
+                        {
+                            if (!this.%(builderField).isNull)
+                            {
+                                return false;
+                            }
+                        }
+                    }.values(Info(builderField)));
+                }
+
+                return true;
+            }
+
             public Nullable!string getError() const
             {
-                static foreach (i, field; T.ConstructorInfo.fields)
+                static foreach (i, builderField; builderFields)
                 {
-                    static if (!T.ConstructorInfo.useDefaults[i])
-                    {
-                        mixin(format!q{
-                            if (this.%s.isNull)
+                    mixin(formatNamed!q{
+                        static if (BuilderFieldInfo!i.isBuilder)
+                        {
+                            // if all fields of builder are null, a default value is permissible.
+                            if (!(this.%(builderField).allNull && T.ConstructorInfo.useDefaults[i]))
                             {
-                                return Nullable!string("required field '%s' not set in builder!");
+                                auto subError = this.%(builderField).getError;
+
+                                if (!subError.isNull)
+                                {
+                                    return subError;
+                                }
                             }
-                        }(field.removeTrailingUnderline, field.removeTrailingUnderline));
-                    }
+                        }
+                        else
+                        {
+                            static if (!T.ConstructorInfo.useDefaults[i])
+                            {
+                                if (this.%(builderField).isNull)
+                                {
+                                    return Nullable!string("required field '%(builderField)' not set in builder!");
+                                }
+                            }
+                        }
+                    }.values(Info(builderField)));
                 }
                 return Nullable!string();
             }
@@ -1052,40 +1169,64 @@ public mixin template BuilderImpl(T)
                 import std.algorithm : map;
                 import std.range : array;
 
-                static foreach (i, field; T.ConstructorInfo.fields)
+                T.ConstructorInfo.Types args = T.ConstructorInfo.Types.init;
+
+                static foreach (i, builderField; builderFields)
                 {
-                    static if (T.ConstructorInfo.useDefaults[i])
-                    {
-                        mixin(format!q{
-                            if (this.%s.isNull)
+                    mixin(formatNamed!q{
+                        static if (BuilderFieldInfo!i.isBuilder)
+                        {
+                            if (this.%(builderField).allNull)
                             {
-                                this.%s = T.ConstructorInfo.defaults[%s];
-
-                                assert(!this.%s.isNull);
+                                static if (T.ConstructorInfo.useDefaults[i])
+                                {
+                                    args[i] = T.ConstructorInfo.defaults[i];
+                                }
+                                else
+                                {
+                                    assert(false, "isValid/build do not match 1");
+                                }
                             }
-                        }(
-                            field.removeTrailingUnderline,
-                            field.removeTrailingUnderline,
-                            i,
-                            field.removeTrailingUnderline));
-                    }
+                            else
+                            {
+                                args[i] = this.%(builderField).build;
+                            }
+                        }
+                        else
+                        {
+                            if (!this.%(builderField).isNull)
+                            {
+                                args[i] = this.%(builderField);
+                            }
+                            else
+                            {
+                                static if (T.ConstructorInfo.useDefaults[i])
+                                {
+                                    args[i] = T.ConstructorInfo.defaults[i];
+                                }
+                                else
+                                {
+                                    assert(false, "isValid/build do not match 2");
+                                }
+                            }
+                        }
+                    }.values(Info(builderField)));
                 }
-
-                enum call = format!q{T(%-(%s, %))}
-                    (T.ConstructorInfo.fields.map!(a => format!"this.%s"(a.removeTrailingUnderline)).array);
 
                 static if (is(T == class))
                 {
-                    return mixin("new "~call);
+                    return new T(args);
                 }
                 else
                 {
-                    return mixin(call);
+                    return T(args);
                 }
             }
         }
     }
 }
+
+public alias removeTrailingUnderlines = array => array.map!removeTrailingUnderline.array;
 
 public string removeTrailingUnderline(string name)
 {
