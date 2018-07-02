@@ -562,8 +562,9 @@ unittest
         mixin(GenerateThis);
     }
 
-    auto value = Struct.build!((builder) {
-        builder.field1 = 1;
+    int one = 1;
+    auto value = build!(Struct, (builder) {
+        builder.field1 = one;
         builder.field2 = 3;
         builder.field3 = 5;
     });
@@ -589,7 +590,7 @@ unittest
         mixin(GenerateThis);
     }
 
-    auto value = Struct.build!((builder) {
+    auto value = build!(Struct, (builder) {
         builder.a = 1;
     });
 
@@ -617,7 +618,7 @@ unittest
         mixin(GenerateThis);
     }
 
-    auto value = Struct2.build!((builder) {
+    auto value = build!(Struct2, (builder) {
         static assert(is(typeof(builder.struct1) == Struct1.Builder));
 
         builder.struct1.a = 1;
@@ -659,7 +660,7 @@ unittest
         mixin(GenerateThis);
     }
 
-    auto value = Struct2.build!((builder) {
+    auto value = build!(Struct2, (builder) {
         builder.c = 1;
         builder.d = 2;
     });
@@ -678,7 +679,7 @@ unittest
         mixin(GenerateThis);
     }
 
-    auto value = Struct.build!((builder) {
+    auto value = build!(Struct, (builder) {
         builder.a = 5;
     });
 
@@ -776,7 +777,6 @@ mixin template GenerateThisTemplate()
         enum string[] memberTypes = CombinedArray!(GetSuperTypeAsString_, GetMemberTypeAsString_);
         enum string[] defaults = CombinedArray!(SuperDefault_, MemberDefault_);
 
-        bool[] passAsConst;
         string[] fields;
         string[] args;
         string[] argexprs;
@@ -892,7 +892,6 @@ mixin template GenerateThisTemplate()
                 }
             }
 
-            passAsConst ~= passExprAsConst;
             fields ~= member;
             args ~= paramName;
             argexprs ~= argexpr;
@@ -1051,29 +1050,24 @@ public template getUDADefaultOrNothing(attributes...)
 
 public mixin template BuilderImpl(T)
 {
-    static if (!isNested!T)
+    static if (!isNested!T && !__traits(isAbstractClass, T))
     {
-        public static T build(alias fill)()
-        {
-            Builder builder = Builder();
-
-            fill(&builder);
-            return builder.build();
-        }
-
-        enum builderFields = T.ConstructorInfo.fields.removeTrailingUnderlines;
-
         public static struct Builder
         {
             static assert(__traits(hasMember, T, "ConstructorInfo"));
 
+            private enum builderFields = T.ConstructorInfo.fields.removeTrailingUnderlines;
+
             private alias Info = Tuple!(string, "builderField");
 
-            template BuilderFieldInfo(int i)
+            private template BuilderFieldInfo(int i)
             {
                 alias BaseType = T.ConstructorInfo.Types[i];
 
-                static if (__traits(hasMember, BaseType, "Builder"))
+                // type has a builder ... that constructs it
+                // protects from such IDIOTIC DESIGN ERRORS as Nullable!T.get
+                static if (__traits(hasMember, BaseType, "Builder")
+                    && is(typeof(BaseType.Builder().build()) == BaseType))
                 {
                     alias Type = BaseType.Builder;
                     enum isBuilder = true;
@@ -1090,7 +1084,7 @@ public mixin template BuilderImpl(T)
                 mixin(formatNamed!q{public BuilderFieldInfo!i.Type %(builderField);}.values(Info(builderField)));
             }
 
-            this(T value)
+            public this(T value)
             {
                 static foreach (i, field; T.ConstructorInfo.fields)
                 {
@@ -1110,7 +1104,7 @@ public mixin template BuilderImpl(T)
                 }
             }
 
-            this(Builder builder)
+            public this(Builder builder)
             {
                 static foreach (i, builderField; builderFields)
                 {
@@ -1130,12 +1124,17 @@ public mixin template BuilderImpl(T)
                 }
             }
 
+            public void opAssign(T value)
+            {
+                this = Builder(value);
+            }
+
             public bool isValid() const
             {
                 return getError().isNull;
             }
 
-            bool allNull() const
+            public bool allNull() const
             {
                 static foreach (i, builderField; builderFields)
                 {
@@ -1193,7 +1192,7 @@ public mixin template BuilderImpl(T)
                 return Nullable!string();
             }
 
-            T build()
+            public T build()
             in
             {
                 assert(isValid);
@@ -1211,7 +1210,11 @@ public mixin template BuilderImpl(T)
                     mixin(formatNamed!q{
                         static if (BuilderFieldInfo!i.isBuilder)
                         {
-                            if (this.%(builderField).allNull)
+                            if (!this.%(builderField).allNull)
+                            {
+                                return this.%(builderField).build();
+                            }
+                            else
                             {
                                 static if (T.ConstructorInfo.useDefaults[i])
                                 {
@@ -1221,10 +1224,6 @@ public mixin template BuilderImpl(T)
                                 {
                                     assert(false, "isValid/build do not match 1");
                                 }
-                            }
-                            else
-                            {
-                                return this.%(builderField).build;
                             }
                         }
                         else
@@ -1291,7 +1290,7 @@ public struct Optional(T)
         return this.isNull_;
     }
 
-    public T get() const
+    public T get()
     in
     {
         assert(!isNull);
@@ -1301,7 +1300,7 @@ public struct Optional(T)
         return this.value;
     }
 
-    public void opAssign(const T value)
+    public void opAssign(T value)
     {
         import std.algorithm : moveEmplace, move;
 
@@ -1318,4 +1317,12 @@ public struct Optional(T)
             move(valueCopy, this.value);
         }
     }
+}
+
+public T build(T, alias fill)()
+{
+    T.Builder builder = T.Builder();
+
+    fill(&builder);
+    return builder.build();
 }
