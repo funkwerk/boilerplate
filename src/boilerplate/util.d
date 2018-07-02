@@ -206,7 +206,7 @@ string isUnsafe(string field)
 }
 
 // a stable, simple O(n) sort optimal for a small number of sort keys
-T[] bucketSort(T)(T[] inputArray, int delegate(T) rankfn)
+T[] bucketSort(T)(T[] inputArray, size_t delegate(T) rankfn)
 {
     import std.algorithm : joiner;
     import std.range : array;

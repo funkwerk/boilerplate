@@ -855,7 +855,7 @@ mixin template GenerateThisTemplate()
             types ~= passExprAsConst ? (`const ` ~ memberTypes[i]) : memberTypes[i];
         }
 
-        int establishParameterRank(size_t i)
+        size_t establishParameterRank(size_t i)
         {
             // parent explicit, our explicit, our implicit, parent implicit
             const fieldOfParent = i < argsPassedToSuper;
@@ -864,7 +864,6 @@ mixin template GenerateThisTemplate()
 
         auto constructorFieldOrder = fields.length.iota.array.bucketSort(&establishParameterRank);
 
-        // don't emit inheritance info for structs
         result ~= format!`
             public static alias ConstructorInfo =
                 saveConstructorInfo!(%s, %s, %-(%s, %)).withDefaults!(%-(%s, %));`
@@ -877,34 +876,22 @@ mixin template GenerateThisTemplate()
 
         if (!(is(typeof(this) == struct) && fields.length == 0)) // don't emit this() for structs
         {
-            result ~= visibility ~ ` this(`;
+            result ~= visibility ~ ` this(`
+                ~ constructorFieldOrder
+                    .map!(i => format!`%s %s%s`(types[i], args[i], defaultAssignments[i]))
+                    .join(`, `)
+                ~ format!`) %-(%s %)`(attributes);
 
-            foreach (k, i; constructorFieldOrder)
-            {
-                auto type = types[i];
-
-                if (k > 0)
-                {
-                    result ~= `, `;
-                }
-
-                result ~= type ~ ` ` ~ args[i] ~ defaultAssignments[i];
-            }
-
-            result ~= format!`) %-(%s %) {`(attributes);
+            result ~= `{`;
 
             static if (is(typeof(typeof(super).ConstructorInfo)))
             {
                 result ~= `super(` ~ args[0 .. argsPassedToSuper].join(", ") ~ `);`;
             }
 
-            foreach (i; fields.length.iota.drop(argsPassedToSuper))
-            {
-                auto field = fields[i];
-                auto argexpr = argexprs[i];
-
-                result ~= `this.` ~ field ~ ` = ` ~ argexpr ~ `;`;
-            }
+            result ~= fields.length.iota.drop(argsPassedToSuper)
+                .map!(i => format!`this.%s = %s;`(fields[i], argexprs[i]))
+                .join;
 
             foreach (i, field; directInitFields)
             {
