@@ -638,6 +638,36 @@ unittest
     }
 }
 
+///
+@("builder supports defaults for nested values")
+unittest
+{
+    struct Struct1
+    {
+        int a;
+        int b;
+
+        mixin(GenerateThis);
+    }
+
+    struct Struct2
+    {
+        int c;
+        @(This.Default!(Struct1(3, 4)))
+        Struct1 struct1;
+        int d;
+
+        mixin(GenerateThis);
+    }
+
+    auto value = Struct2.build!((builder) {
+        builder.c = 1;
+        builder.d = 2;
+    });
+
+    value.shouldEqual(Struct2(1, 2, Struct1(3, 4)));
+}
+
 import std.string : format;
 
 enum GetSuperTypeAsString_(size_t Index) = format!`typeof(super).ConstructorInfo.Types[%s]`(Index);
