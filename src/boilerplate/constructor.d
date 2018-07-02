@@ -441,7 +441,7 @@ unittest
             field1 = 1;
             field2 = 2;
             field3 = 3;
-            return build;
+            return value;
         }
     }();
 
@@ -472,7 +472,7 @@ unittest
             field3 = 1;
             field1 = 2;
             field2 = 3;
-            return build;
+            return value;
         }
     }();
 
@@ -504,7 +504,7 @@ unittest
         {
             field1 = 1;
             field3 = 3;
-            return build;
+            return value;
         }
     }();
 
@@ -535,7 +535,7 @@ unittest
             field1 = 1;
             field3 = 3;
             field2 = 5;
-            return build;
+            return value;
         }
     }();
 
@@ -1067,7 +1067,7 @@ public mixin template BuilderImpl(T)
                 // type has a builder ... that constructs it
                 // protects from such IDIOTIC DESIGN ERRORS as Nullable!T.get
                 static if (__traits(hasMember, BaseType, "Builder")
-                    && is(typeof(BaseType.Builder().build()) == BaseType))
+                    && is(typeof(BaseType.Builder().value) == BaseType))
                 {
                     alias Type = BaseType.Builder;
                     enum isBuilder = true;
@@ -1192,7 +1192,7 @@ public mixin template BuilderImpl(T)
                 return Nullable!string();
             }
 
-            public T build()
+            public @property T value()
             in
             {
                 assert(isValid);
@@ -1212,7 +1212,7 @@ public mixin template BuilderImpl(T)
                         {
                             if (!this.%(builderField).allNull)
                             {
-                                return this.%(builderField).build();
+                                return this.%(builderField).value;
                             }
                             else
                             {
@@ -1324,5 +1324,5 @@ public T build(T, alias fill)()
     T.Builder builder = T.Builder();
 
     fill(&builder);
-    return builder.build();
+    return builder.value;
 }
