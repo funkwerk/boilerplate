@@ -944,7 +944,7 @@ mixin template GenerateThisTemplate()
                 ~ `];`;
         }
 
-        result ~= `mixin boilerplate.constructor.BuilderImpl!(typeof(this));`;
+        result ~= `mixin BuilderImpl!(typeof(this));`;
 
         return result;
     }
