@@ -1185,7 +1185,8 @@ public mixin template BuilderImpl(T)
                             {
                                 if (this.%(builderField).isNull)
                                 {
-                                    return Nullable!string("required field '%(builderField)' not set in builder!");
+                                    return Nullable!string(
+                                        "required field '%(builderField)' of " ~ T.stringof ~ " not set in builder!");
                                 }
                             }
                         }
@@ -1194,10 +1195,15 @@ public mixin template BuilderImpl(T)
                 return Nullable!string();
             }
 
-            public @property T value()
+            public @property T value(size_t line = __LINE__, string file = __FILE__)
             in
             {
-                assert(isValid);
+                import core.exception : AssertError;
+
+                if (!isValid)
+                {
+                    throw new AssertError(getError.get, file, line);
+                }
             }
             do
             {
@@ -1321,10 +1327,10 @@ public struct Optional(T)
     }
 }
 
-public T build(T, alias fill)()
+public T build(T, alias fill)(size_t line = __LINE__, string file = __FILE__)
 {
     T.Builder builder = T.Builder();
 
     fill(&builder);
-    return builder.value;
+    return builder.value(line, file);
 }
