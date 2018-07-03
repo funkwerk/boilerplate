@@ -700,6 +700,26 @@ unittest
     value.shouldEqual(Struct(5));
 }
 
+///
+@("builder supports direct assignment to Nullables")
+unittest
+{
+    import std.typecons : Nullable, nullable;
+
+    struct Struct
+    {
+        const Nullable!int a;
+
+        mixin(GenerateThis);
+    }
+
+    auto value = build!(Struct, (builder) {
+        builder.a = 5;
+    });
+
+    value.shouldEqual(Struct(5.nullable));
+}
+
 import std.string : format;
 
 enum GetSuperTypeAsString_(size_t Index) = format!`typeof(super).ConstructorInfo.Types[%s]`(Index);
@@ -1301,6 +1321,7 @@ public string removeTrailingUnderline(string name)
 public struct Optional(T)
 {
     import std.traits : Unqual;
+    import std.typecons : Nullable;
 
     private Unqual!T value = T.init;
 
@@ -1342,6 +1363,14 @@ public struct Optional(T)
         else
         {
             move(valueCopy, this.value);
+        }
+    }
+
+    static if (is(T: Nullable!Arg, Arg))
+    {
+        public void opAssign(Arg value)
+        {
+            this = T(value);
         }
     }
 }
