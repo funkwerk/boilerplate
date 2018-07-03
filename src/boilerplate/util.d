@@ -174,6 +174,17 @@ template udaIndex(alias attr, attributes...)
                         return -1;
                     }
                 }
+                else static if (__traits(compiles, typeof(attrib)) && __traits(compiles, is(typeof(attrib) == attr)))
+                {
+                    static if (is(typeof(attrib) == attr))
+                    {
+                        return i;
+                    }
+                    else static if (lastAttrib)
+                    {
+                        return -1;
+                    }
+                }
                 else static if (__traits(compiles, is(attrib == attr)))
                 {
                     static if (is(attrib == attr))
