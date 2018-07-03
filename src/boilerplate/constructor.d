@@ -283,6 +283,25 @@ unittest
 }
 
 ///
+@("empty default tag means T()")
+unittest
+{
+    class Class
+    {
+        @(This.Default)
+        string s;
+
+        @(This.Default)
+        int i;
+
+        mixin(GenerateThis);
+    }
+
+    (new Class()).i.shouldEqual(0);
+    (new Class()).s.shouldEqual(null);
+}
+
+///
 @("can exclude fields from constructor")
 unittest
 {
@@ -690,7 +709,7 @@ enum GetMemberTypeAsString_(string Member) = format!`typeof(this.%s)`(Member);
 enum SuperDefault_(size_t Index) = format!`typeof(super).ConstructorInfo.defaults[%s]`(Index);
 
 enum MemberDefault_(string Member) =
-    format!`getUDADefaultOrNothing!(__traits(getAttributes, this.%s))`(Member);
+    format!`getUDADefaultOrNothing!(typeof(this.%s), __traits(getAttributes, this.%s))`(Member, Member);
 
 mixin template GenerateThisTemplate()
 {
@@ -1017,7 +1036,7 @@ struct This
     }
 }
 
-public template getUDADefaultOrNothing(attributes...)
+public template getUDADefaultOrNothing(T, attributes...)
 {
     import boilerplate.util : udaIndex;
 
@@ -1029,6 +1048,11 @@ public template getUDADefaultOrNothing(attributes...)
     static if (udaIndex!(This.Default, attributes) == -1)
     {
         enum getUDADefaultOrNothing = 0;
+    }
+    // @(This.Default)
+    else static if (__traits(isSame, attributes[udaIndex!(This.Default, attributes)], This.Default))
+    {
+        enum getUDADefaultOrNothing = T.init;
     }
     else static if (__traits(compiles, EnumTest!()))
     {

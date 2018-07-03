@@ -150,7 +150,11 @@ template udaIndex(alias attr, attributes...)
 
                 static if (__traits(isTemplate, attr))
                 {
-                    static if (is(attrib: attr!Args, Args...))
+                    static if (__traits(isSame, attrib, attr))
+                    {
+                        return i;
+                    }
+                    else static if (is(attrib: attr!Args, Args...))
                     {
                         return i;
                     }
