@@ -1091,19 +1091,10 @@ public mixin template BuilderImpl(T)
                 static foreach (i, field; T.ConstructorInfo.fields)
                 {
                     mixin(formatNamed!q{
-                        static if (__traits(compiles, value.%(valueField)))
-                        {
-                            static if (BuilderFieldInfo!i.isBuilder)
-                            {
-                                this.%(builderField) = typeof(this.%(builderField))(value.%(valueField));
-                            }
-                            else
-                            {
-                                this.%(builderField) = value.%(valueField);
-                            }
-                        }
+                        this.%(builderField) = value.%(valueField);
                     }.values(Info(builderFields[i]) ~ Tuple!(string, "valueField")(field)));
                 }
+                assert(isValid, getError);
             }
 
             public this(Builder builder)
@@ -1175,7 +1166,7 @@ public mixin template BuilderImpl(T)
 
                                 if (!subError.isNull)
                                 {
-                                    return subError;
+                                    return Nullable!string(subError.get~" of %(T)");
                                 }
                             }
                         }
@@ -1186,7 +1177,7 @@ public mixin template BuilderImpl(T)
                                 if (this.%(builderField).isNull)
                                 {
                                     return Nullable!string(
-                                        "required field '%(builderField)' of " ~ T.stringof ~ " not set in builder!");
+                                        "required field '%(builderField)' not set in builder of " ~ T.stringof);
                                 }
                             }
                         }
@@ -1291,6 +1282,7 @@ public struct Optional(T)
     public this(T value)
     {
         this.value = value;
+        this.isNull_ = false;
     }
 
     public bool isNull() const
