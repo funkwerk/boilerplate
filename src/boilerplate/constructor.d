@@ -743,7 +743,7 @@ mixin template GenerateThisTemplate()
         import boilerplate.constructor : GetMemberTypeAsString_, GetSuperTypeAsString_,
             MemberDefault_, SuperDefault_, This, removeTrailingUnderline;
         import boilerplate.util : GenNormalMemberTuple, bucketSort, needToDup, reorder, udaIndex;
-        import std.algorithm : canFind, filter, map;
+        import std.algorithm : all, canFind, filter, map;
         import std.meta : Alias, aliasSeqOf, staticMap;
         import std.range : array, drop, iota;
         import std.string : endsWith, format, join;
@@ -954,7 +954,7 @@ mixin template GenerateThisTemplate()
             fieldDefault.reorder(constructorFieldOrder)
         );
 
-        if (!(is(typeof(this) == struct) && fields.length == 0)) // don't emit this() for structs
+        if (!(is(typeof(this) == struct) && fieldUseDefault.all)) // don't emit this() for structs
         {
             result ~= visibility ~ ` this(`
                 ~ constructorFieldOrder
