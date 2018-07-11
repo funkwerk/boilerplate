@@ -2,7 +2,7 @@ module boilerplate.constructor;
 
 import std.algorithm : canFind, map;
 import std.range : array;
-import std.traits : isNested;
+import std.traits : hasElaborateDestructor, isNested;
 import std.typecons : Tuple;
 
 version(unittest)
@@ -743,7 +743,7 @@ mixin template GenerateThisTemplate()
         import boilerplate.constructor : GetMemberTypeAsString_, GetSuperTypeAsString_,
             MemberDefault_, SuperDefault_, This, removeTrailingUnderline;
         import boilerplate.util : GenNormalMemberTuple, bucketSort, needToDup, reorder, udaIndex;
-        import std.algorithm : all, canFind, filter, map;
+        import std.algorithm : all, filter, map;
         import std.meta : Alias, aliasSeqOf, staticMap;
         import std.range : array, drop, iota;
         import std.string : endsWith, format, join;
@@ -875,7 +875,8 @@ mixin template GenerateThisTemplate()
 
                     directInitFields ~= member;
                     directInitIndex ~= udaFieldIndex;
-                    directInitUseSelf ~= lambdaWithSelf;
+                    directInitUseSelf ~= __traits(compiles,
+                        __traits(getAttributes, symbol)[udaFieldIndex].value(typeof(this).init));
                     includeMember = false;
 
                     static if (lambdaWithSelf)
@@ -1161,7 +1162,11 @@ if (generateBuilderFor!T)
 
         public void opAssign(T value)
         {
-            this = Builder(value);
+            import std.algorithm : move;
+
+            auto newThis = Builder(value);
+
+            move (newThis, this);
         }
 
         public bool isValid() const
@@ -1317,19 +1322,38 @@ public string removeTrailingUnderline(string name)
     return name.endsWith("_") ? name[0 .. $ - 1] : name;
 }
 
+template SafeUnqual(T)
+{
+    static if (__traits(compiles, (T t) { Unqual!T ut = t; }))
+    {
+        alias SafeUnqual = Unqual!T;
+    }
+    else
+    {
+        alias SafeUnqual = T;
+    }
+}
+
+
 // TODO replace with Nullable once pr 19037 is merged
 public struct Optional(T)
 {
-    import std.traits : Unqual;
     import std.typecons : Nullable;
 
-    private Unqual!T value = T.init;
+    union DontCallDestructorUnion { SafeUnqual!T t; }
+
+    struct DontCallDestructor { DontCallDestructorUnion u; }
+
+    alias wrap = t => DontCallDestructor(DontCallDestructorUnion(t));
+    alias unwrap = v => v.u.t;
+
+    private DontCallDestructor value = DontCallDestructor.init;
 
     private bool isNull_ = true;
 
     public this(T value)
     {
-        this.value = value;
+        this.value = wrap(value);
         this.isNull_ = false;
     }
 
@@ -1345,14 +1369,14 @@ public struct Optional(T)
     }
     do
     {
-        return this.value;
+        return unwrap(this.value);
     }
 
     public void opAssign(T value)
     {
         import std.algorithm : moveEmplace, move;
 
-        Unqual!T valueCopy = value;
+        auto valueCopy = wrap(value);
 
         if (this.isNull_)
         {
@@ -1371,6 +1395,19 @@ public struct Optional(T)
         public void opAssign(Arg value)
         {
             this = T(value);
+        }
+    }
+
+    static if (is(T == struct) && hasElaborateDestructor!T)
+    {
+        ~this()
+        {
+            if (!this.isNull)
+            {
+                import std.algorithm : destroy;
+
+                destroy(unwrap(this.value));
+            }
         }
     }
 }
