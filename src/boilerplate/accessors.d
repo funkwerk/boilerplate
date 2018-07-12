@@ -35,64 +35,64 @@ immutable string GenerateFieldAccessors = `
     mixin(GenerateFieldAccessorMethodsImpl);
     `;
 
-mixin template GenerateFieldAccessorMethods()
+public static string GenerateFieldDecls_(FieldType, Attributes...)
+    (string name, bool synchronize, bool fieldIsStatic, bool fieldIsUnsafe)
 {
-    private static string GenerateFieldDecls(FieldType, Attributes...)
-        (string name, bool synchronize, bool fieldIsStatic, bool fieldIsUnsafe)
+    if (!__ctfe)
     {
-        if (!__ctfe)
-        {
-            return null;
-        }
-
-        string result;
-
-        import boilerplate.accessors : Read, ConstRead, RefRead, Write,
-            GenerateReader, GenerateConstReader, GenerateRefReader, GenerateWriter;
-
-        import boilerplate.util : udaIndex;
-
-        static if (udaIndex!(Read, Attributes) != -1)
-        {
-            string readerDecl = GenerateReader!(FieldType)(
-                name, fieldIsStatic, fieldIsUnsafe, synchronize);
-
-            debug (accessors) pragma(msg, readerDecl);
-            result ~= readerDecl;
-        }
-
-        static if (udaIndex!(RefRead, Attributes) != -1)
-        {
-            result ~= `pragma(msg, "Deprecation! RefRead on ` ~ typeof(this).stringof ~ `.` ~ name
-                ~ ` makes a private field effectively public, defeating the point.");`;
-
-            string refReaderDecl = GenerateRefReader!(FieldType)(name, fieldIsStatic);
-
-            debug (accessors) pragma(msg, refReaderDecl);
-            result ~= refReaderDecl;
-        }
-
-        static if (udaIndex!(ConstRead, Attributes) != -1)
-        {
-            string constReaderDecl = GenerateConstReader!(FieldType)
-                (name, fieldIsStatic, synchronize);
-
-            debug (accessors) pragma(msg, constReaderDecl);
-            result ~= constReaderDecl;
-        }
-
-        static if (udaIndex!(Write, Attributes) != -1)
-        {
-            string writerDecl = GenerateWriter!(FieldType, Attributes)
-                (name, `this.` ~ name, fieldIsStatic, fieldIsUnsafe, synchronize);
-
-            debug (accessors) pragma(msg, writerDecl);
-            result ~= writerDecl;
-        }
-
-        return result;
+        return null;
     }
 
+    string result;
+
+    import boilerplate.accessors : Read, ConstRead, RefRead, Write,
+        GenerateReader, GenerateConstReader, GenerateRefReader, GenerateWriter;
+
+    import boilerplate.util : udaIndex;
+
+    static if (udaIndex!(Read, Attributes) != -1)
+    {
+        string readerDecl = GenerateReader!(FieldType)(
+            name, fieldIsStatic, fieldIsUnsafe, synchronize);
+
+        debug (accessors) pragma(msg, readerDecl);
+        result ~= readerDecl;
+    }
+
+    static if (udaIndex!(RefRead, Attributes) != -1)
+    {
+        result ~= `pragma(msg, "Deprecation! RefRead on " ~ typeof(this).stringof ~ ".` ~ name
+            ~ ` makes a private field effectively public, defeating the point.");`;
+
+        string refReaderDecl = GenerateRefReader!(FieldType)(name, fieldIsStatic);
+
+        debug (accessors) pragma(msg, refReaderDecl);
+        result ~= refReaderDecl;
+    }
+
+    static if (udaIndex!(ConstRead, Attributes) != -1)
+    {
+        string constReaderDecl = GenerateConstReader!(FieldType)
+            (name, fieldIsStatic, synchronize);
+
+        debug (accessors) pragma(msg, constReaderDecl);
+        result ~= constReaderDecl;
+    }
+
+    static if (udaIndex!(Write, Attributes) != -1)
+    {
+        string writerDecl = GenerateWriter!(FieldType, Attributes)
+            (name, `this.` ~ name, fieldIsStatic, fieldIsUnsafe, synchronize);
+
+        debug (accessors) pragma(msg, writerDecl);
+        result ~= writerDecl;
+    }
+
+    return result;
+}
+
+mixin template GenerateFieldAccessorMethods()
+{
     private static string GenerateFieldAccessorMethodsImpl()
     {
         if (!__ctfe)
@@ -100,6 +100,7 @@ mixin template GenerateFieldAccessorMethods()
             return null;
         }
 
+        import boilerplate.accessors : GenerateFieldDecls_;
         import boilerplate.util : GenNormalMemberTuple, isStatic, isUnsafe;
 
         string result = "";
@@ -108,16 +109,16 @@ mixin template GenerateFieldAccessorMethods()
 
         foreach (name; NormalMemberTuple)
         {
-            mixin("alias field = typeof(this)." ~ name ~ ";");
-
             // synchronized without lock contention is basically free, so always do it
             // TODO enable when https://issues.dlang.org/show_bug.cgi?id=18504 is fixed
-            enum synchronize = false && is(typeof(field) == class);
+            // enum synchronize = is(typeof(__traits(getMember, typeof(this), name)) == class);
             enum fieldIsStatic = mixin(name.isStatic);
             enum fieldIsUnsafe = mixin(name.isUnsafe);
 
-            result ~= GenerateFieldDecls!(typeof(field), __traits(getAttributes, field))
-                (name, synchronize, fieldIsStatic, fieldIsUnsafe);
+            result ~= GenerateFieldDecls_!(
+                typeof(__traits(getMember, typeof(this), name)),
+                __traits(getAttributes, __traits(getMember, typeof(this), name))
+            ) (name, /*synchronize*/false, fieldIsStatic, fieldIsUnsafe);
         }
 
         return result;
