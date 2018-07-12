@@ -646,7 +646,7 @@ mixin template GenerateToStringTemplate()
 
                 foreach (member; NormalMemberTuple)
                 {
-                    mixin("alias symbol = this." ~ member ~ ";");
+                    mixin("alias symbol = typeof(this)." ~ member ~ ";");
 
                     enum udaInclude = udaIndex!(ToString.Include, __traits(getAttributes, symbol)) != -1;
                     enum udaExclude = udaIndex!(ToString.Exclude, __traits(getAttributes, symbol)) != -1;

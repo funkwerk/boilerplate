@@ -297,7 +297,7 @@ mixin template GenerateInvariantsTemplate()
 
         foreach (member; NormalMemberTuple)
         {
-            mixin(`alias symbol = this.` ~ member ~ `;`);
+            mixin(`alias symbol = typeof(this).` ~ member ~ `;`);
 
             alias ConditionAttributes = StdMetaFilter!(IsConditionAttribute, __traits(getAttributes, symbol));
 
@@ -323,6 +323,13 @@ mixin template GenerateInvariantsTemplate()
 }
 
 public string generateChecksForAttributes(T, Attributes...)(string member_expression, string info = "")
+if (Attributes.length == 0)
+{
+    return null;
+}
+
+public string generateChecksForAttributes(T, Attributes...)(string member_expression, string info = "")
+if (Attributes.length > 0)
 {
     import boilerplate.conditions : NonEmpty, NonNull;
     import boilerplate.util : udaIndex;

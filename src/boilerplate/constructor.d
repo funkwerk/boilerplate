@@ -547,7 +547,7 @@ mixin template GenerateThisTemplate()
             }
             else
             {
-                mixin("alias symbol = this." ~ member ~ ";");
+                mixin("alias symbol = typeof(this)." ~ member ~ ";");
 
                 static assert (is(typeof(symbol)) && !__traits(isTemplate, symbol)); /* must have a resolvable type */
 

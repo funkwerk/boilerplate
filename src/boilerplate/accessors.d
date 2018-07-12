@@ -57,7 +57,7 @@ mixin template GenerateFieldAccessorMethods()
         {
             enum string fieldCode = `this.` ~ name;
 
-            mixin("alias field = " ~ fieldCode ~ ";");
+            mixin("alias field = typeof(this)." ~ name ~ ";");
 
             // synchronized without lock contention is basically free, so always do it
             // TODO enable when https://issues.dlang.org/show_bug.cgi?id=18504 is fixed
