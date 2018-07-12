@@ -332,11 +332,11 @@ public string generateChecksForAttributes(T, Attributes...)(string member_expres
 if (Attributes.length > 0)
 {
     import boilerplate.conditions : NonEmpty, NonNull;
-    import boilerplate.util : udaIndex;
+    import boilerplate.util : formatNamed, udaIndex;
     import std.array : empty;
     import std.string : format;
     import std.traits : ConstOf, isAssociativeArray;
-    import std.typecons : Nullable;
+    import std.typecons : Nullable, tuple;
 
     enum isNullable = is(T: Nullable!Args, Args...);
 
@@ -353,6 +353,8 @@ if (Attributes.length > 0)
 
     string expression = format!access(member_expression);
 
+    auto values = tuple!("expr", "info", "typename")(expression, info, MemberType.stringof);
+
     enum canFormat = __traits(compiles, format(`%s`, ConstOf!MemberType.init));
 
     string checks;
@@ -361,19 +363,19 @@ if (Attributes.length > 0)
     {
         static if (!__traits(compiles, MemberType.init.empty()))
         {
-            return format!`static assert(false, "Cannot call std.array.empty() on '%s'");`(expression);
+            return formatNamed!`static assert(false, "Cannot call std.array.empty() on '%(expr)'");`.values(values);
         }
 
         static if (canFormat)
         {
-            checks ~= format!(`assert(!%s.empty, `
-                ~ `format("@NonEmpty: assert(!%s.empty) failed%s: %s = %%s", %s));`)
-                (expression, expression, info, expression, expression);
+            checks ~= formatNamed!(`assert(!%(expr).empty, `
+                ~ `format("@NonEmpty: assert(!%(expr).empty) failed%(info): %(expr) = %s", %(expr)));`)
+                .values(values);
         }
         else
         {
-            checks ~= format!`assert(!%s.empty(), "@NonEmpty: assert(!%s.empty) failed%s");`
-                (expression, expression, info);
+            checks ~= formatNamed!`assert(!%(expr).empty(), "@NonEmpty: assert(!%(expr).empty) failed%(info)");`
+                .values(values);
         }
     }
 
@@ -381,42 +383,40 @@ if (Attributes.length > 0)
     {
         static if (__traits(compiles, MemberType.init.isNull))
         {
-            checks ~= format!`assert(!%s.isNull, "@NonNull: assert(!%s.isNull) failed%s");`
-                (expression, expression, info);
+            checks ~= formatNamed!`assert(!%(expr).isNull, "@NonNull: assert(!%(expr).isNull) failed%(info)");`
+                .values(values);
         }
         else static if (__traits(compiles, MemberType.init !is null))
         {
             // Nothing good can come of printing something that is null.
-            checks ~= format!`assert(%s !is null, "@NonNull: assert(%s !is null) failed%s");`
-                (expression, expression, info);
+            checks ~= formatNamed!`assert(%(expr) !is null, "@NonNull: assert(%(expr) !is null) failed%(info)");`
+                .values(values);
         }
         else
         {
-            return format!`static assert(false, "Cannot compare '%s' to null");`(expression);
+            return formatNamed!`static assert(false, "Cannot compare '%(expr)' to null");`.values(values);
         }
     }
 
     static if (udaIndex!(NonInit, Attributes) != -1)
     {
-        auto reference = `typeof(` ~ expression ~ `).init`;
-
         if (!__traits(compiles, MemberType.init !is MemberType.init))
         {
-            return format!`static assert(false, "Cannot compare '%s' to %s.init");`(expression, MemberType.stringof);
+            return formatNamed!`static assert(false, "Cannot compare '%(expr)' to %(typename).init");`
+                .values(values);
         }
 
         static if (canFormat)
         {
-            checks ~=
-                format!(`assert(%s !is %s, `
-                    ~ `format("@NonInit: assert(%s !is %s.init) failed%s: %s = %%s", %s));`)
-                    (expression, reference, expression, MemberType.stringof, info, expression, expression);
+            checks ~= formatNamed!(`assert(%(expr) !is typeof(%(expr)).init, `
+                ~ `format("@NonInit: assert(%(expr) !is %(typename).init) failed%(info): %(expr) = %s", %(expr)));`)
+                .values(values);
         }
         else
         {
-            checks ~=
-                format!`assert(%s !is %s, "@NonInit: assert(%s !is %s.init) failed%s");`
-                    (expression, reference, expression, MemberType.stringof, info);
+            checks ~= formatNamed!(`assert(%(expr) !is typeof(%(expr)).init, `
+                ~ `"@NonInit: assert(%(expr) !is %(typename).init) failed%(info)");`)
+                .values(values);
         }
     }
 
@@ -430,32 +430,30 @@ if (Attributes.length > 0)
         {
             static if (canFormat)
             {
-                checks ~=
-                    format!(`assert(%s.all!"a !is null", format(`
-                        ~ `"@AllNonNull: assert(%s.all!\"a !is null\") failed%s: %s = %%s", %s));`)
-                        (expression, expression, info, expression, expression);
+                checks ~= formatNamed!(`assert(%(expr).all!"a !is null", format(`
+                    ~ `"@AllNonNull: assert(%(expr).all!\"a !is null\") failed%(info): %(expr) = %s", %(expr)));`)
+                    .values(values);
             }
             else
             {
-                checks ~= format!(`assert(%s.all!"a !is null", `
-                    ~ `"@AllNonNull: assert(%s.all!\"a !is null\") failed%s");`)
-                    (expression, expression, info);
+                checks ~= formatNamed!(`assert(%(expr).all!"a !is null", `
+                    ~ `"@AllNonNull: assert(%(expr).all!\"a !is null\") failed%(info)");`)
+                    .values(values);
             }
         }
         else static if (__traits(compiles, MemberType.init.all!"!a.isNull"))
         {
             static if (canFormat)
             {
-                checks ~=
-                    format!(`assert(%s.all!"!a.isNull", format(`
-                        ~ `"@AllNonNull: assert(%s.all!\"!a.isNull\") failed%s: %s = %%s", %s));`)
-                        (expression, expression, info, expression, expression);
+                checks ~= formatNamed!(`assert(%(expr).all!"!a.isNull", format(`
+                    ~ `"@AllNonNull: assert(%(expr).all!\"!a.isNull\") failed%(info): %(expr) = %s", %(expr)));`)
+                    .values(values);
             }
             else
             {
-                checks ~= format!(`assert(%s.all!"!a.isNull", `
-                    ~ `"@AllNonNull: assert(%s.all!\"!a.isNull\") failed%s");`)
-                    (expression, expression, info);
+                checks ~= formatNamed!(`assert(%(expr).all!"!a.isNull", `
+                    ~ `"@AllNonNull: assert(%(expr).all!\"!a.isNull\") failed%(info)");`)
+                    .values(values);
             }
         }
         else static if (__traits(compiles, isAssociativeArray!MemberType))
@@ -465,29 +463,29 @@ if (Attributes.length > 0)
 
             static if (!checkKeys && !checkValues)
             {
-                return format!(`static assert(false, "Neither key nor value of associative array `
-                    ~ `'%s' can be checked against null.");`)(expression);
+                return formatNamed!(`static assert(false, "Neither key nor value of associative array `
+                    ~ `'%(expr)' can be checked against null.");`).values(values);
             }
 
             static if (checkValues)
             {
                 checks ~=
-                    format!(`assert(%s.byValue.all!"a !is null", `
-                        ~ `"@AllNonNull: assert(%s.byValue.all!\"a !is null\") failed%s");`)
-                        (expression, expression, info);
+                    formatNamed!(`assert(%(expr).byValue.all!"a !is null", `
+                        ~ `"@AllNonNull: assert(%(expr).byValue.all!\"a !is null\") failed%(info)");`)
+                        .values(values);
             }
 
             static if (checkKeys)
             {
                 checks ~=
-                    format!(`assert(%s.byKey.all!"a !is null", `
-                        ~ `"@AllNonNull: assert(%s.byKey.all!\"a !is null\") failed%s");`)
-                        (expression, expression, info);
+                    formatNamed!(`assert(%(expr).byKey.all!"a !is null", `
+                        ~ `"@AllNonNull: assert(%(expr).byKey.all!\"a !is null\") failed%(info)");`)
+                        .values(values);
             }
         }
         else
         {
-            return format!`static assert(false, "Cannot compare all '%s' to null");`(expression);
+            return formatNamed!`static assert(false, "Cannot compare all '%(expr)' to null");`.values(values);
         }
     }
 

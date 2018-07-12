@@ -1,6 +1,7 @@
 module boilerplate.util;
 
 import std.meta;
+import std.range : iota;
 import std.traits;
 
 enum needToDup(T) = isArray!(T) && !DeepConst!(T);
@@ -290,4 +291,135 @@ void sinkWrite(T)(scope void delegate(const(char)[]) sink, ref bool comma, strin
             sink.formattedWrite(fmt, arg);
         }
     }
+}
+
+private string quote(string text)
+{
+    import std.string : replace;
+
+    return `"` ~ text.replace(`\`, `\\`).replace(`"`, `\"`) ~ `"`;
+}
+
+private string genFormatFunctionImpl(string text)
+{
+    import std.algorithm : findSplit;
+    import std.exception : enforce;
+    import std.format : format;
+    import std.range : empty;
+    import std.string : join;
+
+    string[] fragments;
+
+    string remainder = text;
+
+    while (true)
+    {
+        auto splitLeft = remainder.findSplit("%(");
+
+        if (splitLeft[1].empty)
+        {
+            break;
+        }
+
+        auto splitRight = splitLeft[2].findSplit(")");
+
+        enforce(!splitRight[1].empty, format!"Closing paren not found in '%s'"(remainder));
+        remainder = splitRight[2];
+
+        fragments ~= quote(splitLeft[0]);
+        fragments ~= splitRight[0];
+    }
+    fragments ~= quote(remainder);
+
+    return `string values(T)(T arg)
+    {
+        with (arg)
+        {
+            return ` ~ fragments.join(" ~ ") ~ `;
+        }
+    }`;
+}
+
+public template formatNamed(string text)
+{
+    mixin(genFormatFunctionImpl(text));
+}
+
+///
+@("formatNamed replaces named keys with given values")
+unittest
+{
+    import std.typecons : tuple;
+    import unit_threaded.should;
+
+    formatNamed!("Hello %(second) World %(first)%(second)!")
+        .values(tuple!("first", "second")("3", "5"))
+        .shouldEqual("Hello 5 World 35!");
+}
+
+
+template evenMemberIsString(T...)
+{
+    enum evenMemberIsString(int i) = isSomeString!(T[i * 2]);
+}
+
+public string formatNamed(T...)(string text, T arguments)
+// even length, argument[0], [2], [4]... are strings
+if (T.length % 2 == 0 && allSatisfy!(evenMemberIsString!T, aliasSeqOf!((T.length / 2).iota)))
+{
+    import std.algorithm : findSplit;
+    import std.array : empty;
+    import std.exception : enforce;
+    import std.format : format;
+
+    string replaceNamedArg(string match)
+    {
+        import std.format : format;
+
+        static foreach (i; (T.length / 2).iota)
+        {{
+            import std.conv : to;
+
+            auto key = arguments[i * 2 + 0];
+            auto value = arguments[i * 2 + 1];
+
+            if (match == key)
+            {
+                return value.to!string;
+            }
+        }}
+
+        assert(false, format!"Unknown format key: '%s'"(match).dup);
+    }
+
+    string result;
+    string remainder = text;
+
+    while (true)
+    {
+        auto splitLeft = remainder.findSplit("%(");
+
+        if (splitLeft[1].empty)
+        {
+            break;
+        }
+
+        auto splitRight = splitLeft[2].findSplit(")");
+
+        enforce(!splitRight[1].empty, format!"Closing paren not found in '%s'"(remainder));
+        remainder = splitRight[2];
+        result ~= splitLeft[0] ~ replaceNamedArg(splitRight[0]);
+    }
+
+    return result ~ remainder;
+}
+
+///
+@("formatNamed replaces named keys with given values")
+unittest
+{
+    import unit_threaded.should;
+
+    "Hello %(second) World %(first)%(second)!".formatNamed("first", 3, "second", 5)
+        .shouldEqual("Hello 5 World 35!");
 }

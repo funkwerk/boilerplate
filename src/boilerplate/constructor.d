@@ -10,8 +10,9 @@ GenerateThis is a mixin string that automatically generates a this() function, c
 +/
 public enum string GenerateThis = `
     import boilerplate.constructor: GenerateThisTemplate, getUDADefaultOrNothing;
-    import boilerplate.util: udaIndex;
+    import boilerplate.util: formatNamed, udaIndex;
     import std.meta : AliasSeq;
+    import std.format : format;
     mixin GenerateThisTemplate;
     mixin(typeof(this).generateThisImpl());
 `;
