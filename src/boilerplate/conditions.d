@@ -1,5 +1,7 @@
 module boilerplate.conditions;
 
+import std.typecons;
+
 version(unittest)
 {
     import core.exception : AssertError;
@@ -201,8 +203,6 @@ if any, contained in the field. The "null" state of the field is ignored.
 @("doesn't throw when a Nullable field is null")
 unittest
 {
-    import std.typecons : Nullable, nullable;
-
     class Class
     {
         @NonInit
@@ -227,8 +227,6 @@ Conditions can be applied to static attributes, generating static invariants.
 @("does not allow invariants on static fields")
 unittest
 {
-    import std.typecons : Nullable, nullable;
-
     static assert(!__traits(compiles, ()
     {
         class Class
@@ -322,21 +320,20 @@ mixin template GenerateInvariantsTemplate()
     }
 }
 
-public string generateChecksForAttributes(T, Attributes...)(string member_expression, string info = "")
+public string generateChecksForAttributes(T, Attributes...)(string memberExpression, string info = "")
 if (Attributes.length == 0)
 {
     return null;
 }
 
-public string generateChecksForAttributes(T, Attributes...)(string member_expression, string info = "")
+private alias InfoTuple = Tuple!(string, "expr", string, "info", string, "typename");
+
+public string generateChecksForAttributes(T, Attributes...)(string memberExpression, string info = "")
 if (Attributes.length > 0)
 {
-    import boilerplate.conditions : NonEmpty, NonNull;
     import boilerplate.util : formatNamed, udaIndex;
-    import std.array : empty;
     import std.string : format;
-    import std.traits : ConstOf, isAssociativeArray;
-    import std.typecons : Nullable, tuple;
+    import std.traits : ConstOf;
 
     enum isNullable = is(T: Nullable!Args, Args...);
 
@@ -349,159 +346,203 @@ if (Attributes.length > 0)
         enum access = `%s`;
     }
 
-    alias MemberType = typeof(mixin(format!access(`T.init`)));
+    alias MemberType = typeof(mixin(isNullable ? `T.init.get` : `T.init`));
 
-    string expression = format!access(member_expression);
+    string expression = isNullable ? (memberExpression ~ `.get`) : memberExpression;
 
-    auto values = tuple!("expr", "info", "typename")(expression, info, MemberType.stringof);
-
-    enum canFormat = __traits(compiles, format(`%s`, ConstOf!MemberType.init));
+    auto values = InfoTuple(expression, info, MemberType.stringof);
 
     string checks;
 
     static if (udaIndex!(NonEmpty, Attributes) != -1)
     {
-        static if (!__traits(compiles, MemberType.init.empty()))
-        {
-            return formatNamed!`static assert(false, "Cannot call std.array.empty() on '%(expr)'");`.values(values);
-        }
-
-        static if (canFormat)
-        {
-            checks ~= formatNamed!(`assert(!%(expr).empty, `
-                ~ `format("@NonEmpty: assert(!%(expr).empty) failed%(info): %(expr) = %s", %(expr)));`)
-                .values(values);
-        }
-        else
-        {
-            checks ~= formatNamed!`assert(!%(expr).empty(), "@NonEmpty: assert(!%(expr).empty) failed%(info)");`
-                .values(values);
-        }
+        checks ~= generateNonEmpty!MemberType(values);
     }
 
     static if (udaIndex!(NonNull, Attributes) != -1)
     {
-        static if (__traits(compiles, MemberType.init.isNull))
-        {
-            checks ~= formatNamed!`assert(!%(expr).isNull, "@NonNull: assert(!%(expr).isNull) failed%(info)");`
-                .values(values);
-        }
-        else static if (__traits(compiles, MemberType.init !is null))
-        {
-            // Nothing good can come of printing something that is null.
-            checks ~= formatNamed!`assert(%(expr) !is null, "@NonNull: assert(%(expr) !is null) failed%(info)");`
-                .values(values);
-        }
-        else
-        {
-            return formatNamed!`static assert(false, "Cannot compare '%(expr)' to null");`.values(values);
-        }
+        checks ~= generateNonNull!MemberType(values);
     }
 
     static if (udaIndex!(NonInit, Attributes) != -1)
     {
-        if (!__traits(compiles, MemberType.init !is MemberType.init))
-        {
-            return formatNamed!`static assert(false, "Cannot compare '%(expr)' to %(typename).init");`
-                .values(values);
-        }
-
-        static if (canFormat)
-        {
-            checks ~= formatNamed!(`assert(%(expr) !is typeof(%(expr)).init, `
-                ~ `format("@NonInit: assert(%(expr) !is %(typename).init) failed%(info): %(expr) = %s", %(expr)));`)
-                .values(values);
-        }
-        else
-        {
-            checks ~= formatNamed!(`assert(%(expr) !is typeof(%(expr)).init, `
-                ~ `"@NonInit: assert(%(expr) !is %(typename).init) failed%(info)");`)
-                .values(values);
-        }
+        checks ~= generateNonInit!MemberType(values);
     }
 
     static if (udaIndex!(AllNonNull, Attributes) != -1)
     {
-        import std.algorithm: all;
-
-        checks ~= `import std.algorithm: all;`;
-
-        static if (__traits(compiles, MemberType.init.all!"a !is null"))
-        {
-            static if (canFormat)
-            {
-                checks ~= formatNamed!(`assert(%(expr).all!"a !is null", format(`
-                    ~ `"@AllNonNull: assert(%(expr).all!\"a !is null\") failed%(info): %(expr) = %s", %(expr)));`)
-                    .values(values);
-            }
-            else
-            {
-                checks ~= formatNamed!(`assert(%(expr).all!"a !is null", `
-                    ~ `"@AllNonNull: assert(%(expr).all!\"a !is null\") failed%(info)");`)
-                    .values(values);
-            }
-        }
-        else static if (__traits(compiles, MemberType.init.all!"!a.isNull"))
-        {
-            static if (canFormat)
-            {
-                checks ~= formatNamed!(`assert(%(expr).all!"!a.isNull", format(`
-                    ~ `"@AllNonNull: assert(%(expr).all!\"!a.isNull\") failed%(info): %(expr) = %s", %(expr)));`)
-                    .values(values);
-            }
-            else
-            {
-                checks ~= formatNamed!(`assert(%(expr).all!"!a.isNull", `
-                    ~ `"@AllNonNull: assert(%(expr).all!\"!a.isNull\") failed%(info)");`)
-                    .values(values);
-            }
-        }
-        else static if (__traits(compiles, isAssociativeArray!MemberType))
-        {
-            enum checkValues = __traits(compiles, MemberType.init.byValue.all!`a !is null`);
-            enum checkKeys = __traits(compiles, MemberType.init.byKey.all!"a !is null");
-
-            static if (!checkKeys && !checkValues)
-            {
-                return formatNamed!(`static assert(false, "Neither key nor value of associative array `
-                    ~ `'%(expr)' can be checked against null.");`).values(values);
-            }
-
-            static if (checkValues)
-            {
-                checks ~=
-                    formatNamed!(`assert(%(expr).byValue.all!"a !is null", `
-                        ~ `"@AllNonNull: assert(%(expr).byValue.all!\"a !is null\") failed%(info)");`)
-                        .values(values);
-            }
-
-            static if (checkKeys)
-            {
-                checks ~=
-                    formatNamed!(`assert(%(expr).byKey.all!"a !is null", `
-                        ~ `"@AllNonNull: assert(%(expr).byKey.all!\"a !is null\") failed%(info)");`)
-                        .values(values);
-            }
-        }
-        else
-        {
-            return formatNamed!`static assert(false, "Cannot compare all '%(expr)' to null");`.values(values);
-        }
-    }
-
-    if (checks.empty)
-    {
-        return null;
+        checks ~= generateAllNonNull!MemberType(values);
     }
 
     static if (isNullable)
     {
-        return `if (!` ~ member_expression ~ `.isNull) {` ~ checks ~ `}`;
+        return `if (!` ~ memberExpression ~ `.isNull) {` ~ checks ~ `}`;
     }
     else
     {
         return checks;
     }
+}
+
+private string generateNonEmpty(T)(InfoTuple values)
+{
+    import boilerplate.util : formatNamed;
+    import std.array : empty;
+
+    string checks;
+
+    static if (!__traits(compiles, T.init.empty()))
+    {
+        checks ~= formatNamed!`static assert(false, "Cannot call std.array.empty() on '%(expr)'");`.values(values);
+    }
+
+    enum canFormat = __traits(compiles, format(`%s`, ConstOf!MemberType.init));
+
+    static if (canFormat)
+    {
+        checks ~= formatNamed!(`assert(!%(expr).empty, `
+            ~ `format("@NonEmpty: assert(!%(expr).empty) failed%(info): %(expr) = %s", %(expr)));`)
+            .values(values);
+    }
+    else
+    {
+        checks ~= formatNamed!`assert(!%(expr).empty(), "@NonEmpty: assert(!%(expr).empty) failed%(info)");`
+            .values(values);
+    }
+
+    return checks;
+}
+
+private string generateNonNull(T)(InfoTuple values)
+{
+    import boilerplate.util : formatNamed;
+
+    string checks;
+
+    static if (__traits(compiles, T.init.isNull))
+    {
+        checks ~= formatNamed!`assert(!%(expr).isNull, "@NonNull: assert(!%(expr).isNull) failed%(info)");`
+            .values(values);
+    }
+    else static if (__traits(compiles, T.init !is null))
+    {
+        // Nothing good can come of printing something that is null.
+        checks ~= formatNamed!`assert(%(expr) !is null, "@NonNull: assert(%(expr) !is null) failed%(info)");`
+            .values(values);
+    }
+    else
+    {
+        checks ~= formatNamed!`static assert(false, "Cannot compare '%(expr)' to null");`.values(values);
+    }
+
+    return checks;
+}
+
+private string generateNonInit(T)(InfoTuple values)
+{
+    import boilerplate.util : formatNamed;
+
+    string checks;
+
+    enum canFormat = __traits(compiles, format(`%s`, ConstOf!MemberType.init));
+
+    static if (!__traits(compiles, T.init !is T.init))
+    {
+        checks ~= formatNamed!`static assert(false, "Cannot compare '%(expr)' to %(typename).init");`
+            .values(values);
+    }
+
+    static if (canFormat)
+    {
+        checks ~= formatNamed!(`assert(%(expr) !is typeof(%(expr)).init, `
+            ~ `format("@NonInit: assert(%(expr) !is %(typename).init) failed%(info): %(expr) = %s", %(expr)));`)
+            .values(values);
+    }
+    else
+    {
+        checks ~= formatNamed!(`assert(%(expr) !is typeof(%(expr)).init, `
+            ~ `"@NonInit: assert(%(expr) !is %(typename).init) failed%(info)");`)
+            .values(values);
+    }
+
+    return checks;
+}
+
+private string generateAllNonNull(T)(InfoTuple values)
+{
+    import boilerplate.util : formatNamed;
+    import std.algorithm : all;
+    import std.traits : isAssociativeArray;
+
+    string checks;
+
+    enum canFormat = __traits(compiles, format(`%s`, ConstOf!MemberType.init));
+
+    checks ~= `import std.algorithm: all;`;
+
+    static if (__traits(compiles, T.init.all!"a !is null"))
+    {
+        static if (canFormat)
+        {
+            checks ~= formatNamed!(`assert(%(expr).all!"a !is null", format(`
+                ~ `"@AllNonNull: assert(%(expr).all!\"a !is null\") failed%(info): %(expr) = %s", %(expr)));`)
+                .values(values);
+        }
+        else
+        {
+            checks ~= formatNamed!(`assert(%(expr).all!"a !is null", `
+                ~ `"@AllNonNull: assert(%(expr).all!\"a !is null\") failed%(info)");`)
+                .values(values);
+        }
+    }
+    else static if (__traits(compiles, T.init.all!"!a.isNull"))
+    {
+        static if (canFormat)
+        {
+            checks ~= formatNamed!(`assert(%(expr).all!"!a.isNull", format(`
+                ~ `"@AllNonNull: assert(%(expr).all!\"!a.isNull\") failed%(info): %(expr) = %s", %(expr)));`)
+                .values(values);
+        }
+        else
+        {
+            checks ~= formatNamed!(`assert(%(expr).all!"!a.isNull", `
+                ~ `"@AllNonNull: assert(%(expr).all!\"!a.isNull\") failed%(info)");`)
+                .values(values);
+        }
+    }
+    else static if (__traits(compiles, isAssociativeArray!T))
+    {
+        enum checkValues = __traits(compiles, T.init.byValue.all!`a !is null`);
+        enum checkKeys = __traits(compiles, T.init.byKey.all!"a !is null");
+
+        static if (!checkKeys && !checkValues)
+        {
+            checks ~= formatNamed!(`static assert(false, "Neither key nor value of associative array `
+                ~ `'%(expr)' can be checked against null.");`).values(values);
+        }
+
+        static if (checkValues)
+        {
+            checks ~=
+                formatNamed!(`assert(%(expr).byValue.all!"a !is null", `
+                    ~ `"@AllNonNull: assert(%(expr).byValue.all!\"a !is null\") failed%(info)");`)
+                    .values(values);
+        }
+
+        static if (checkKeys)
+        {
+            checks ~=
+                formatNamed!(`assert(%(expr).byKey.all!"a !is null", `
+                    ~ `"@AllNonNull: assert(%(expr).byKey.all!\"a !is null\") failed%(info)");`)
+                    .values(values);
+        }
+    }
+    else
+    {
+        checks ~= formatNamed!`static assert(false, "Cannot compare all '%(expr)' to null");`.values(values);
+    }
+
+    return checks;
 }
 
 public enum IsConditionAttribute(alias A) = __traits(isSame, A, NonEmpty) || __traits(isSame, A, NonNull)
