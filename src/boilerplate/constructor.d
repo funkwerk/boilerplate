@@ -657,6 +657,36 @@ unittest
 }
 
 ///
+@("builder supports direct value assignment for nested values")
+unittest
+{
+    struct Struct1
+    {
+        int a;
+        int b;
+
+        mixin(GenerateThis);
+    }
+
+    struct Struct2
+    {
+        int c;
+        Struct1 struct1;
+        int d;
+
+        mixin(GenerateThis);
+    }
+
+    auto builder = Struct2.Builder();
+
+    builder.struct1 = Struct1(3, 4);
+    builder.c = 1;
+    builder.d = 2;
+
+    builder.value.shouldEqual(Struct2(1, 2, Struct1(3, 4)));
+}
+
+///
 @("builder supports const args")
 unittest
 {
