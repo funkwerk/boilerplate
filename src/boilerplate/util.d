@@ -402,20 +402,17 @@ public struct Optional(T)
 {
     import std.typecons : Nullable;
 
-    union DontCallDestructorUnion { SafeUnqual!T t; }
+    union DontCallDestructor { SafeUnqual!T t; }
 
-    struct DontCallDestructor { DontCallDestructorUnion u; }
+    struct UseMemcpyMove { DontCallDestructor u; }
 
-    alias wrap = t => DontCallDestructor(DontCallDestructorUnion(t));
-    alias unwrap = v => v.u.t;
-
-    private DontCallDestructor value = DontCallDestructor.init;
+    private UseMemcpyMove value = UseMemcpyMove.init;
 
     private bool isNull_ = true;
 
     public this(T value)
     {
-        this.value = wrap(value);
+        this.value = UseMemcpyMove(DontCallDestructor(value));
         this.isNull_ = false;
     }
 
@@ -424,21 +421,21 @@ public struct Optional(T)
         return this.isNull_;
     }
 
-    public T get()
+    public T get() const
     in
     {
         assert(!isNull);
     }
     do
     {
-        return unwrap(this.value);
+        return this.value.u.t;
     }
 
     public void opAssign(T value)
     {
         import std.algorithm : moveEmplace, move;
 
-        auto valueCopy = wrap(value);
+        auto valueCopy = UseMemcpyMove(DontCallDestructor(value));
 
         if (this.isNull_)
         {
@@ -468,7 +465,7 @@ public struct Optional(T)
             {
                 import std.algorithm : destroy;
 
-                destroy(unwrap(this.value));
+                destroy(this.value.u.v);
             }
         }
     }
