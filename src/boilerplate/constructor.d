@@ -704,6 +704,30 @@ unittest
 }
 
 ///
+@("builder supports fields with destructor")
+unittest
+{
+    static struct Struct1
+    {
+        ~this() pure @safe @nogc nothrow { }
+    }
+
+    struct Struct2
+    {
+        Struct1 struct1;
+
+        mixin(GenerateThis);
+    }
+
+    with (Struct2.Builder())
+    {
+        struct1 = Struct1();
+
+        value.shouldEqual(Struct2(Struct1()));
+    }
+}
+
+///
 @("builder supports direct assignment to Nullables")
 unittest
 {

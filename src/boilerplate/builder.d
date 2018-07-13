@@ -198,22 +198,22 @@ public struct BuilderProxy(T)
         this.data.value = value;
     }
 
-    package bool isUnset() const @nogc nothrow pure @safe
+    package bool isUnset() const
     {
         return this.mode == Mode.unset;
     }
 
-    package bool isValue() const @nogc nothrow pure @safe
+    package bool isValue() const
     {
         return this.mode == Mode.value;
     }
 
-    package bool isBuilder() const @nogc nothrow pure @safe
+    package bool isBuilder() const
     {
         return this.mode == Mode.builder;
     }
 
-    package T value_() const @nogc nothrow pure @safe
+    package T value_() const
     in
     {
         assert(this.mode == Mode.value);
@@ -223,7 +223,7 @@ public struct BuilderProxy(T)
         return this.data.value;
     }
 
-    package ref auto builder_() const @nogc nothrow pure @safe
+    package ref auto builder_() const
     in
     {
         assert(this.mode == Mode.builder);
@@ -233,9 +233,9 @@ public struct BuilderProxy(T)
         return this.data.builder;
     }
 
-    alias builder_implicit_ this;
+    alias implicitBuilder_ this;
 
-    public @property ref Builder!T builder_implicit_() @nogc nothrow pure @safe
+    public @property ref Builder!T implicitBuilder_()
     in
     {
         assert(

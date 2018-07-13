@@ -402,8 +402,10 @@ public struct Optional(T)
 {
     import std.typecons : Nullable;
 
+    // workaround: types in union are not destructed
     union DontCallDestructor { SafeUnqual!T t; }
 
+    // workaround: types in struct are memcpied in move/moveEmplace, bypassing constness
     struct UseMemcpyMove { DontCallDestructor u; }
 
     private UseMemcpyMove value = UseMemcpyMove.init;
@@ -463,9 +465,7 @@ public struct Optional(T)
         {
             if (!this.isNull)
             {
-                import std.algorithm : destroy;
-
-                destroy(this.value.u.v);
+                destroy(this.value.u.t);
             }
         }
     }
