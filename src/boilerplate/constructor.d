@@ -1,5 +1,7 @@
 module boilerplate.constructor;
 
+import std.typecons : Tuple;
+
 version(unittest)
 {
     import unit_threaded.should;
@@ -9,10 +11,12 @@ version(unittest)
 GenerateThis is a mixin string that automatically generates a this() function, customizable with UDA.
 +/
 public enum string GenerateThis = `
-    import boilerplate.constructor: GenerateThisTemplate, getUDADefaultOrNothing;
+    import boilerplate.constructor: BuilderImpl, GenerateThisTemplate, getUDADefaultOrNothing, removeTrailingUnderline;
     import boilerplate.util: formatNamed, udaIndex;
     import std.meta : AliasSeq;
     import std.format : format;
+    import std.traits : isNested;
+    import std.typecons : Nullable;
     mixin GenerateThisTemplate;
     mixin(typeof(this).generateThisImpl());
 `;
@@ -414,6 +418,184 @@ unittest
     }
 }
 
+///
+@("generates Builder class that gathers constructor parameters, then calls constructor with them")
+unittest
+{
+    static class Class
+    {
+        int field1;
+        int field2;
+        int field3;
+
+        mixin(GenerateThis);
+    }
+
+    auto obj = {
+        with (Class.Builder())
+        {
+            field1 = 1;
+            field2 = 2;
+            field3 = 3;
+            return build;
+        }
+    }();
+
+    with (obj)
+    {
+        field1.shouldEqual(1);
+        field2.shouldEqual(2);
+        field3.shouldEqual(3);
+    }
+}
+
+///
+@("builder field order doesn't matter")
+unittest
+{
+    static class Class
+    {
+        int field1;
+        int field2;
+        int field3;
+
+        mixin(GenerateThis);
+    }
+
+    auto obj = {
+        with (Class.Builder())
+        {
+            field3 = 1;
+            field1 = 2;
+            field2 = 3;
+            return build;
+        }
+    }();
+
+    with (obj)
+    {
+        field1.shouldEqual(2);
+        field2.shouldEqual(3);
+        field3.shouldEqual(1);
+    }
+}
+
+///
+@("default fields can be left out when assigning builder")
+unittest
+{
+    static class Class
+    {
+        int field1;
+        @(This.Default!5)
+        int field2;
+        int field3;
+
+        mixin(GenerateThis);
+    }
+
+    // constructor is this(field1, field3, field2 = 5)
+    auto obj = {
+        with (Class.Builder())
+        {
+            field1 = 1;
+            field3 = 3;
+            return build;
+        }
+    }();
+
+    with (obj)
+    {
+        field1.shouldEqual(1);
+        field2.shouldEqual(5);
+        field3.shouldEqual(3);
+    }
+}
+
+///
+@("supports Builder in structs")
+unittest
+{
+    struct Struct
+    {
+        int field1;
+        int field2;
+        int field3;
+
+        mixin(GenerateThis);
+    }
+
+    auto value = {
+        with (Struct.Builder())
+        {
+            field1 = 1;
+            field3 = 3;
+            field2 = 5;
+            return build;
+        }
+    }();
+
+    static assert(is(typeof(value) == Struct));
+
+    with (value)
+    {
+        field1.shouldEqual(1);
+        field2.shouldEqual(5);
+        field3.shouldEqual(3);
+    }
+}
+
+///
+@("strips trailing underlines")
+unittest
+{
+    struct Struct
+    {
+        private int a_;
+
+        mixin(GenerateThis);
+    }
+
+    auto value = {
+        with (Struct.Builder())
+        {
+            a = 1;
+            return build;
+        }
+    }();
+
+    value.shouldEqual(Struct(1));
+}
+
+///
+@("Class.build creates builder and passes it, which is more compact")
+unittest
+{
+    struct Struct
+    {
+        int field1;
+        int field2;
+        int field3;
+
+        mixin(GenerateThis);
+    }
+
+    auto value = Struct.build!((builder) {
+        builder.field1 = 1;
+        builder.field2 = 3;
+        builder.field3 = 5;
+    });
+
+    static assert(is(typeof(value) == Struct));
+
+    with (value)
+    {
+        field1.shouldEqual(1);
+        field2.shouldEqual(3);
+        field3.shouldEqual(5);
+    }
+}
+
 import std.string : format;
 
 enum GetSuperTypeAsString_(size_t Index) = format!`typeof(super).ConstructorInfo.Types[%s]`(Index);
@@ -435,7 +617,7 @@ mixin template GenerateThisTemplate()
         }
 
         import boilerplate.constructor : GetMemberTypeAsString_, GetSuperTypeAsString_,
-            MemberDefault_, SuperDefault_, This;
+            MemberDefault_, SuperDefault_, This, removeTrailingUnderline;
         import boilerplate.util : GenNormalMemberTuple, bucketSort, needToDup, reorder, udaIndex;
         import std.algorithm : canFind, filter, map;
         import std.meta : Alias, aliasSeqOf, staticMap;
@@ -602,16 +784,7 @@ mixin template GenerateThisTemplate()
 
             if (!includeMember) continue;
 
-            string paramName;
-
-            if (member.endsWith("_"))
-            {
-                paramName = member[0 .. $ - 1];
-            }
-            else
-            {
-                paramName = member;
-            }
+            string paramName = member.removeTrailingUnderline;
 
             string argexpr = paramName;
 
@@ -640,8 +813,6 @@ mixin template GenerateThisTemplate()
             types ~= passExprAsConst ? (`const ` ~ memberTypes[i]) : memberTypes[i];
         }
 
-        result ~= visibility ~ ` this(`;
-
         int establishParameterRank(size_t i)
         {
             // parent explicit, our explicit, our implicit, parent implicit
@@ -651,75 +822,70 @@ mixin template GenerateThisTemplate()
 
         auto constructorFieldOrder = fields.length.iota.array.bucketSort(&establishParameterRank);
 
-        foreach (k, i; constructorFieldOrder)
-        {
-            auto type = types[i];
+        // don't emit inheritance info for structs
+        result ~= format!`
+            public static alias ConstructorInfo =
+                saveConstructorInfo!(%s, %s, %-(%s, %)).withDefaults!(%-(%s, %));`
+        (
+            fields.reorder(constructorFieldOrder),
+            fieldUseDefault.reorder(constructorFieldOrder),
+            types.reorder(constructorFieldOrder),
+            fieldDefault.reorder(constructorFieldOrder)
+        );
 
-            if (k > 0)
+        if (!(is(typeof(this) == struct) && fields.length == 0)) // don't emit this() for structs
+        {
+            result ~= visibility ~ ` this(`;
+
+            foreach (k, i; constructorFieldOrder)
             {
-                result ~= `, `;
+                auto type = types[i];
+
+                if (k > 0)
+                {
+                    result ~= `, `;
+                }
+
+                result ~= type ~ ` ` ~ args[i] ~ defaultAssignments[i];
             }
 
-            result ~= type ~ ` ` ~ args[i] ~ defaultAssignments[i];
-        }
+            result ~= format!`) %-(%s %) {`(attributes);
 
-        result ~= format!`) %-(%s %) {`(attributes);
-
-        static if (is(typeof(typeof(super).ConstructorInfo)))
-        {
-            result ~= `super(` ~ args[0 .. argsPassedToSuper].join(", ") ~ `);`;
-        }
-
-        foreach (i; fields.length.iota.drop(argsPassedToSuper))
-        {
-            auto field = fields[i];
-            auto argexpr = argexprs[i];
-
-            result ~= `this.` ~ field ~ ` = ` ~ argexpr ~ `;`;
-        }
-
-        foreach (i, field; directInitFields)
-        {
-            if (directInitUseSelf[i])
+            static if (is(typeof(typeof(super).ConstructorInfo)))
             {
-                result ~= format!`this.%s = __traits(getAttributes, this.%s)[%s].value(this);`
-                    (field, field, directInitIndex[i]);
+                result ~= `super(` ~ args[0 .. argsPassedToSuper].join(", ") ~ `);`;
             }
-            else
+
+            foreach (i; fields.length.iota.drop(argsPassedToSuper))
             {
-                result ~= format!`this.%s = __traits(getAttributes, this.%s)[%s].value;`
-                    (field, field, directInitIndex[i]);
+                auto field = fields[i];
+                auto argexpr = argexprs[i];
+
+                result ~= `this.` ~ field ~ ` = ` ~ argexpr ~ `;`;
             }
-        }
 
-        result ~= `}`;
+            foreach (i, field; directInitFields)
+            {
+                if (directInitUseSelf[i])
+                {
+                    result ~= format!`this.%s = __traits(getAttributes, this.%s)[%s].value(this);`
+                        (field, field, directInitIndex[i]);
+                }
+                else
+                {
+                    result ~= format!`this.%s = __traits(getAttributes, this.%s)[%s].value;`
+                        (field, field, directInitIndex[i]);
+                }
+            }
 
-        static if (!is(typeof(this) == struct))
-        {
-            // don't emit inheritance info for structs
-            result ~= format!`
-                public static alias ConstructorInfo =
-                    saveConstructorInfo!(%s, %s, %-(%s, %)).withDefaults!(%-(%s, %));`
-            (
-                fields.reorder(constructorFieldOrder),
-                fieldUseDefault.reorder(constructorFieldOrder),
-                types.reorder(constructorFieldOrder),
-                fieldDefault.reorder(constructorFieldOrder)
-            );
-
+            result ~= `}`;
 
             result ~= `protected static enum string[] GeneratedConstructorAttributes_ = [`
                 ~ attributes.map!(a => `"` ~ a ~ `"`).join(`, `)
                 ~ `];`;
         }
-        else
-        {
-            if (fields.length == 0)
-            {
-                // don't generate empty constructor for structs
-                return "";
-            }
-        }
+
+        result ~= `mixin boilerplate.constructor.BuilderImpl!(typeof(this));`;
 
         return result;
     }
@@ -805,4 +971,125 @@ public template getUDADefaultOrNothing(attributes...)
             return attributes[udaIndex!(This.Default, attributes)].value;
         }
     }
+}
+
+public mixin template BuilderImpl(T)
+{
+    static if (!isNested!T)
+    {
+        public static T build(alias fill)()
+        {
+            Builder builder = Builder();
+
+            fill(&builder);
+            return builder.build();
+        }
+
+        public static struct Builder
+        {
+            static assert(__traits(hasMember, T, "ConstructorInfo"));
+
+            static foreach (i, field; T.ConstructorInfo.fields)
+            {
+                mixin(format!q{public Nullable!(T.ConstructorInfo.Types[i]) %s;}(field.removeTrailingUnderline));
+            }
+
+            this(T value)
+            {
+                static foreach (field; T.ConstructorInfo.fields)
+                {
+                    mixin(format!q{
+                        static if (__traits(compiles, value.%s))
+                        {
+                            this.%s = value.%s;
+                        }
+                    }(field, field.removeTrailingUnderline, field));
+                }
+            }
+
+            this(Builder builder)
+            {
+                static foreach (field; T.ConstructorInfo.fields)
+                {
+                    mixin(format!q{
+                        if (!builder.%s.isNull)
+                        {
+                            this.%s = builder.%s;
+                        }
+                    }(field.removeTrailingUnderline, field.removeTrailingUnderline, field.removeTrailingUnderline));
+                }
+            }
+
+            public bool isValid() const
+            {
+                return getError().isNull;
+            }
+
+            public Nullable!string getError() const
+            {
+                static foreach (i, field; T.ConstructorInfo.fields)
+                {
+                    static if (!T.ConstructorInfo.useDefaults[i])
+                    {
+                        mixin(format!q{
+                            if (this.%s.isNull)
+                            {
+                                return Nullable!string("required field '%s' not set in builder!");
+                            }
+                        }(field.removeTrailingUnderline, field.removeTrailingUnderline));
+                    }
+                }
+                return Nullable!string();
+            }
+
+            T build()
+            in
+            {
+                assert(isValid);
+            }
+            do
+            {
+                import std.algorithm : map;
+                import std.range : array;
+
+                static foreach (i, field; T.ConstructorInfo.fields)
+                {
+                    static if (T.ConstructorInfo.useDefaults[i])
+                    {
+                        mixin(format!q{
+                            if (this.%s.isNull)
+                            {
+                                this.%s = T.ConstructorInfo.defaults[%s];
+
+                                assert(!this.%s.isNull);
+                            }
+                        }(
+                            field.removeTrailingUnderline,
+                            field.removeTrailingUnderline,
+                            i,
+                            field.removeTrailingUnderline));
+                    }
+                }
+
+                enum call = format!q{T(%-(%s, %))}
+                    (T.ConstructorInfo.fields.map!(a => format!"this.%s"(a.removeTrailingUnderline)).array);
+
+                static if (is(T == class))
+                {
+                    return mixin("new "~call);
+                }
+                else
+                {
+                    return mixin(call);
+                }
+            }
+        }
+    }
+}
+
+public string removeTrailingUnderline(string name)
+{
+    import std.string : endsWith;
+
+    return name.endsWith("_") ? name[0 .. $ - 1] : name;
 }
