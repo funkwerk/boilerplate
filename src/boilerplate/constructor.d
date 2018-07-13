@@ -717,8 +717,9 @@ mixin template GenerateThisTemplate()
         }
 
         import boilerplate.constructor : GetMemberTypeAsString_, GetSuperTypeAsString_,
-            MemberDefault_, SuperDefault_, This, removeTrailingUnderline;
-        import boilerplate.util : GenNormalMemberTuple, bucketSort, needToDup, reorder, udaIndex;
+            MemberDefault_, SuperDefault_, This;
+        import boilerplate.util : GenNormalMemberTuple, bucketSort, needToDup,
+            reorder, udaIndex, removeTrailingUnderline;
         import std.algorithm : all, filter, map;
         import std.meta : Alias, aliasSeqOf, staticMap;
         import std.range : array, drop, iota;
@@ -1066,13 +1067,12 @@ public template getUDADefaultOrNothing(T, attributes...)
 
 public static struct Builder(T)
 {
-    import boilerplate.util : formatNamed;
+    import boilerplate.util : Optional, formatNamed, removeTrailingUnderline;
     import std.typecons : Nullable;
-    import std.meta : allSatisfy, aliasSeqOf;
 
     static assert(__traits(hasMember, T, "ConstructorInfo"));
 
-    private enum builderFields = T.ConstructorInfo.fields.removeTrailingUnderlines;
+    private enum builderFields = T.ConstructorInfo.fields.map!removeTrailingUnderline.array;
 
     private alias Info = Tuple!(string, "builderField");
 
@@ -1234,105 +1234,6 @@ public static struct Builder(T)
         {
             return mixin(format!q{T(%-(%s, %))}(
                 builderFields.length.iota.map!(i => format!`getArg!%s`(i)).array));
-        }
-    }
-}
-
-public alias removeTrailingUnderlines = array => array.map!removeTrailingUnderline.array;
-
-public string removeTrailingUnderline(string name)
-{
-    import std.string : endsWith;
-
-    return name.endsWith("_") ? name[0 .. $ - 1] : name;
-}
-
-template SafeUnqual(T)
-{
-    static if (__traits(compiles, (T t) { Unqual!T ut = t; }))
-    {
-        alias SafeUnqual = Unqual!T;
-    }
-    else
-    {
-        alias SafeUnqual = T;
-    }
-}
-
-
-// TODO replace with Nullable once pr 19037 is merged
-public struct Optional(T)
-{
-    import std.typecons : Nullable;
-
-    union DontCallDestructorUnion { SafeUnqual!T t; }
-
-    struct DontCallDestructor { DontCallDestructorUnion u; }
-
-    alias wrap = t => DontCallDestructor(DontCallDestructorUnion(t));
-    alias unwrap = v => v.u.t;
-
-    private DontCallDestructor value = DontCallDestructor.init;
-
-    private bool isNull_ = true;
-
-    public this(T value)
-    {
-        this.value = wrap(value);
-        this.isNull_ = false;
-    }
-
-    public bool isNull() const
-    {
-        return this.isNull_;
-    }
-
-    public T get()
-    in
-    {
-        assert(!isNull);
-    }
-    do
-    {
-        return unwrap(this.value);
-    }
-
-    public void opAssign(T value)
-    {
-        import std.algorithm : moveEmplace, move;
-
-        auto valueCopy = wrap(value);
-
-        if (this.isNull_)
-        {
-            moveEmplace(valueCopy, this.value);
-
-            this.isNull_ = false;
-        }
-        else
-        {
-            move(valueCopy, this.value);
-        }
-    }
-
-    static if (is(T: Nullable!Arg, Arg))
-    {
-        public void opAssign(Arg value)
-        {
-            this = T(value);
-        }
-    }
-
-    static if (is(T == struct) && hasElaborateDestructor!T)
-    {
-        ~this()
-        {
-            if (!this.isNull)
-            {
-                import std.algorithm : destroy;
-
-                destroy(unwrap(this.value));
-            }
         }
     }
 }

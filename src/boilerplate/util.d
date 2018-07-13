@@ -396,3 +396,100 @@ unittest
 
     [1, 2, 3].reorder([0, 2, 1]).shouldEqual([1, 3, 2]);
 }
+
+
+// TODO replace with Nullable once pr 19037 is merged
+public struct Optional(T)
+{
+    import std.typecons : Nullable;
+
+    union DontCallDestructorUnion { SafeUnqual!T t; }
+
+    struct DontCallDestructor { DontCallDestructorUnion u; }
+
+    alias wrap = t => DontCallDestructor(DontCallDestructorUnion(t));
+    alias unwrap = v => v.u.t;
+
+    private DontCallDestructor value = DontCallDestructor.init;
+
+    private bool isNull_ = true;
+
+    public this(T value)
+    {
+        this.value = wrap(value);
+        this.isNull_ = false;
+    }
+
+    public bool isNull() const
+    {
+        return this.isNull_;
+    }
+
+    public T get()
+    in
+    {
+        assert(!isNull);
+    }
+    do
+    {
+        return unwrap(this.value);
+    }
+
+    public void opAssign(T value)
+    {
+        import std.algorithm : moveEmplace, move;
+
+        auto valueCopy = wrap(value);
+
+        if (this.isNull_)
+        {
+            moveEmplace(valueCopy, this.value);
+
+            this.isNull_ = false;
+        }
+        else
+        {
+            move(valueCopy, this.value);
+        }
+    }
+
+    static if (is(T: Nullable!Arg, Arg))
+    {
+        public void opAssign(Arg value)
+        {
+            this = T(value);
+        }
+    }
+
+    static if (is(T == struct) && hasElaborateDestructor!T)
+    {
+        ~this()
+        {
+            if (!this.isNull)
+            {
+                import std.algorithm : destroy;
+
+                destroy(unwrap(this.value));
+            }
+        }
+    }
+}
+
+private template SafeUnqual(T)
+{
+    static if (__traits(compiles, (T t) { Unqual!T ut = t; }))
+    {
+        alias SafeUnqual = Unqual!T;
+    }
+    else
+    {
+        alias SafeUnqual = T;
+    }
+}
+
+public string removeTrailingUnderline(string name)
+{
+    import std.string : endsWith;
+
+    return name.endsWith("_") ? name[0 .. $ - 1] : name;
+}
