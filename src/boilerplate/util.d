@@ -410,23 +410,18 @@ public struct Optional(T)
 
     private UseMemcpyMove value = UseMemcpyMove.init;
 
-    private bool isNull_ = true;
+    public bool isNull = true;
 
     public this(T value)
     {
         this.value = UseMemcpyMove(DontCallDestructor(value));
-        this.isNull_ = false;
+        this.isNull = false;
     }
 
-    public bool isNull() const
-    {
-        return this.isNull_;
-    }
-
-    public T get() const
+    public inout(T) get() inout
     in
     {
-        assert(!isNull);
+        assert(!this.isNull);
     }
     do
     {
@@ -439,11 +434,11 @@ public struct Optional(T)
 
         auto valueCopy = UseMemcpyMove(DontCallDestructor(value));
 
-        if (this.isNull_)
+        if (this.isNull)
         {
             moveEmplace(valueCopy, this.value);
 
-            this.isNull_ = false;
+            this.isNull = false;
         }
         else
         {

@@ -1,12 +1,14 @@
 module boilerplate.builder;
 
+import boilerplate.util;
+import std.algorithm : map;
+import std.format : format;
+import std.range : array, iota;
+import std.traits : Unqual;
+import std.typecons : Nullable, Tuple;
+
 public struct Builder(T)
 {
-    import boilerplate.util : Optional, formatNamed, removeTrailingUnderline;
-    import std.algorithm : map;
-    import std.range : array;
-    import std.typecons : Nullable, Tuple;
-
     static assert(__traits(hasMember, T, "ConstructorInfo"));
 
     private enum builderFields = T.ConstructorInfo.fields.map!removeTrailingUnderline.array;
@@ -39,7 +41,7 @@ public struct Builder(T)
 
     public bool isValid() const
     {
-        return getError().isNull;
+        return this.getError().isNull;
     }
 
     public Nullable!string getError() const
@@ -84,23 +86,18 @@ public struct Builder(T)
         return Nullable!string();
     }
 
-    public @property T value(size_t line = __LINE__, string file = __FILE__) const
+    public @property T value(size_t line = __LINE__, string file = __FILE__)
     in
     {
         import core.exception : AssertError;
 
-        if (!isValid)
+        if (!this.isValid)
         {
-            throw new AssertError(getError.get, file, line);
+            throw new AssertError(this.getError.get, file, line);
         }
     }
     do
     {
-        import std.algorithm : map;
-        import std.format : format;
-        import std.range : array, iota;
-        import std.traits : Unqual;
-
         auto getArg(int i)()
         {
             enum builderField = builderFields[i];
@@ -151,15 +148,15 @@ public struct Builder(T)
             }.values(Info(builderField)));
         }
 
+        enum getArgArray = T.ConstructorInfo.fields.length.iota.map!(i => format!`getArg!%s`(i)).array;
+
         static if (is(T == class))
         {
-            return mixin(format!q{new T(%-(%s, %))}(
-                builderFields.length.iota.map!(i => format!`getArg!%s`(i)).array));
+            return mixin(format!q{new T(%-(%s, %))}(getArgArray));
         }
         else
         {
-            return mixin(format!q{T(%-(%s, %))}(
-                builderFields.length.iota.map!(i => format!`getArg!%s`(i)).array));
+            return mixin(format!q{T(%-(%s, %))}(getArgArray));
         }
     }
 }
@@ -213,7 +210,7 @@ public struct BuilderProxy(T)
         return this.mode == Mode.builder;
     }
 
-    package T value_() const
+    package inout(T) value_() inout
     in
     {
         assert(this.mode == Mode.value);
@@ -223,7 +220,7 @@ public struct BuilderProxy(T)
         return this.data.value;
     }
 
-    package ref auto builder_() const
+    package ref auto builder_() inout
     in
     {
         assert(this.mode == Mode.builder);
