@@ -455,6 +455,30 @@ unittest
     Struct.init.to!string.shouldEqual("Struct(ni=no)");
 }
 
+// see unittest.config.string
+@("supports optional BitFlags in structs")
+unittest
+{
+    import std.typecons : BitFlags;
+
+    enum Enum
+    {
+        A = 1,
+        B = 2,
+    }
+
+    struct Struct
+    {
+        @(ToString.Optional)
+        BitFlags!Enum field;
+
+        mixin(GenerateToString);
+    }
+
+    Struct.init.to!string.shouldEqual("Struct()");
+    Struct(BitFlags!Enum(Enum.A, Enum.B)).to!string.shouldEqual("Struct(field=Enum(A, B))");
+}
+
 mixin template GenerateToStringTemplate()
 {
 
@@ -782,6 +806,11 @@ mixin template GenerateToStringTemplate()
                             else static if (__traits(compiles, typeof(symbol).init != 0))
                             {
                                 result ~= format!`if (%s != 0) { %s }`
+                                    (membervalue, writestmt);
+                            }
+                            else static if (__traits(compiles, { if (typeof(symbol).init) { } }))
+                            {
+                                result ~= format!`if (%s) { %s }`
                                     (membervalue, writestmt);
                             }
                             else
