@@ -1,21 +1,22 @@
 module boilerplate.builder;
 
 import boilerplate.util;
-import std.algorithm : map;
+import std.algorithm : canFind, map;
 import std.format : format;
 import std.range : array, iota, zip;
 import std.traits : Unqual;
 import std.typecons : Nullable, Tuple;
 
+private alias Info = Tuple!(string, "typeField", string, "builderField");
+
 public struct Builder(T)
 {
     static assert(__traits(hasMember, T, "ConstructorInfo"));
 
-    private alias Info = Tuple!(string, "typeField", string, "builderField");
     private enum fields = T.ConstructorInfo.fields;
     private enum fieldInfoList = fields
         .zip(fields.map!removeTrailingUnderline)
-        .map!((Tuple!(string, string) pair) => Info(pair[0], pair[1]))
+        .map!toInfo_
         .array;
 
     private template BuilderFieldInfo(string member)
@@ -89,7 +90,7 @@ public struct Builder(T)
         return Nullable!string();
     }
 
-    public @property T value(size_t line = __LINE__, string file = __FILE__)
+    public @property T builderValue(size_t line = __LINE__, string file = __FILE__)
     in
     {
         import core.exception : AssertError;
@@ -159,6 +160,11 @@ public struct Builder(T)
         {
             return mixin(format!q{T(%-(%s, %))}(getArgArray));
         }
+    }
+
+    static if (!fields.canFind("value"))
+    {
+        public alias value = builderValue;
     }
 }
 
@@ -250,4 +256,9 @@ public struct BuilderProxy(T)
 
         return this.data.builder;
     }
+}
+
+public Info toInfo_(Tuple!(string, string) pair)
+{
+    return Info(pair[0], pair[1]);
 }
