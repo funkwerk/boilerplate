@@ -991,9 +991,11 @@ mixin template GenerateThisTemplate()
                 types.reorder(constructorFieldOrder),
                 fieldUseDefault.reorder(constructorFieldOrder),
                 fieldDefault.reorder(constructorFieldOrder),
+                fields.reorder(constructorFieldOrder)
+                    .map!(field => format!q{__traits(getAttributes, this.%s)}(field)),
             )
             .map!(args
-                => format!`ConstructorField!(%s, %s, %s)`(args[0], args[1], args[2]))
+                => format!`ConstructorField!(%s, %s, %s, %s)`(args[0], args[1], args[2], args[3]))
             .array
         );
 
@@ -1047,11 +1049,12 @@ mixin template GenerateThisTemplate()
     }
 }
 
-public template ConstructorField(Type_, bool useDefault_, alias fieldDefault_)
+public template ConstructorField(Type_, bool useDefault_, alias fieldDefault_, attributes_...)
 {
     public alias Type = Type_;
     public enum useDefault = useDefault_;
     public alias fieldDefault = fieldDefault_;
+    public alias attributes = attributes_;
 }
 
 public template saveConstructorInfo(string[] fields_, Fields...)
