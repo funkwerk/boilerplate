@@ -3,7 +3,7 @@ module boilerplate.builder;
 import boilerplate.util;
 import std.algorithm : map;
 import std.format : format;
-import std.range : array, iota;
+import std.range : array, iota, zip;
 import std.traits : Unqual;
 import std.typecons : Nullable, Tuple;
 
@@ -11,13 +11,16 @@ public struct Builder(T)
 {
     static assert(__traits(hasMember, T, "ConstructorInfo"));
 
-    private enum builderFields = T.ConstructorInfo.fields.map!removeTrailingUnderline.array;
+    private alias Info = Tuple!(string, "typeField", string, "builderField");
+    private enum fields = T.ConstructorInfo.fields;
+    private enum fieldInfoList = fields
+        .zip(fields.map!removeTrailingUnderline)
+        .map!((Tuple!(string, string) pair) => Info(pair[0], pair[1]))
+        .array;
 
-    private alias Info = Tuple!(string, "builderField");
-
-    private template BuilderFieldInfo(int i)
+    private template BuilderFieldInfo(string member)
     {
-        alias BaseType = T.ConstructorInfo.Types[i];
+        mixin(format!q{alias BaseType = T.ConstructorInfo.FieldInfo.%s.Type;}(member));
 
         // type has a builder ... that constructs it
         // protects from such IDIOTIC DESIGN ERRORS as `alias Nullable!T.get this`
@@ -34,9 +37,9 @@ public struct Builder(T)
         }
     }
 
-    static foreach (i, builderField; builderFields)
+    static foreach (info; fieldInfoList)
     {
-        mixin(formatNamed!q{public BuilderFieldInfo!i.Type %(builderField);}.values(Info(builderField)));
+        mixin(formatNamed!q{public BuilderFieldInfo!(info.typeField).Type %(builderField);}.values(info));
     }
 
     public bool isValid() const
@@ -46,15 +49,15 @@ public struct Builder(T)
 
     public Nullable!string getError() const
     {
-        static foreach (i, builderField; builderFields)
+        static foreach (info; fieldInfoList)
         {
             mixin(formatNamed!q{
-                static if (BuilderFieldInfo!i.isBuildable)
+                static if (BuilderFieldInfo!(info.typeField).isBuildable)
                 {
                     // if the proxy has never been used as a builder,
                     // ie. either a value was assigned or it was untouched
                     // then a default value may be used instead.
-                    if (this.%(builderField).isUnset && T.ConstructorInfo.useDefaults[i])
+                    if (this.%(builderField).isUnset && T.ConstructorInfo.FieldInfo.%(typeField).useDefault)
                     {
                     }
                     else
@@ -72,7 +75,7 @@ public struct Builder(T)
                 }
                 else
                 {
-                    static if (!T.ConstructorInfo.useDefaults[i])
+                    static if (!T.ConstructorInfo.FieldInfo.%(typeField).useDefault)
                     {
                         if (this.%(builderField).isNull)
                         {
@@ -81,7 +84,7 @@ public struct Builder(T)
                         }
                     }
                 }
-            }.values(Info(builderField)));
+            }.values(info));
         }
         return Nullable!string();
     }
@@ -98,12 +101,10 @@ public struct Builder(T)
     }
     do
     {
-        auto getArg(int i)()
+        auto getArg(Info info)()
         {
-            enum builderField = builderFields[i];
-
             mixin(formatNamed!q{
-                static if (BuilderFieldInfo!i.isBuildable)
+                static if (BuilderFieldInfo!(info.typeField).isBuildable)
                 {
                     if (this.%(builderField).isBuilder)
                     {
@@ -117,9 +118,9 @@ public struct Builder(T)
                     {
                         assert(this.%(builderField).isUnset);
 
-                        static if (T.ConstructorInfo.useDefaults[i])
+                        static if (T.ConstructorInfo.FieldInfo.%(typeField).useDefault)
                         {
-                            return T.ConstructorInfo.defaults[i];
+                            return T.ConstructorInfo.FieldInfo.%(typeField).fieldDefault;
                         }
                         else
                         {
@@ -135,9 +136,9 @@ public struct Builder(T)
                     }
                     else
                     {
-                        static if (T.ConstructorInfo.useDefaults[i])
+                        static if (T.ConstructorInfo.FieldInfo.%(typeField).useDefault)
                         {
-                            return T.ConstructorInfo.defaults[i];
+                            return T.ConstructorInfo.FieldInfo.%(typeField).fieldDefault;
                         }
                         else
                         {
@@ -145,10 +146,10 @@ public struct Builder(T)
                         }
                     }
                 }
-            }.values(Info(builderField)));
+            }.values(info));
         }
 
-        enum getArgArray = T.ConstructorInfo.fields.length.iota.map!(i => format!`getArg!%s`(i)).array;
+        enum getArgArray = fieldInfoList.length.iota.map!(i => format!`getArg!(fieldInfoList[%s])`(i)).array;
 
         static if (is(T == class))
         {
