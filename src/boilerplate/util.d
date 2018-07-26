@@ -446,6 +446,16 @@ public struct Optional(T)
         }
     }
 
+    public void opOpAssign(string op, RHS)(RHS rhs)
+    if (__traits(compiles, mixin("T.init " ~ op ~ " RHS.init")))
+    {
+        if (this.isNull)
+        {
+            this = T.init;
+        }
+        mixin("this = this.get " ~ op ~ " rhs;");
+    }
+
     static if (is(T: Nullable!Arg, Arg))
     {
         public void opAssign(Arg value)
@@ -464,6 +474,23 @@ public struct Optional(T)
             }
         }
     }
+}
+
+///
+unittest
+{
+    Optional!(int[]) intArrayOptional;
+
+    assert(intArrayOptional.isNull);
+
+    intArrayOptional ~= 5;
+
+    assert(!intArrayOptional.isNull);
+    assert(intArrayOptional.get == [5]);
+
+    intArrayOptional ~= 6;
+
+    assert(intArrayOptional.get == [5, 6]);
 }
 
 private template SafeUnqual(T)
