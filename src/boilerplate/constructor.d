@@ -257,6 +257,12 @@ unittest
         mixin(GenerateThis);
     }
 
+    @(This.Package("boilerplate"))
+    class SubPackageClass
+    {
+        mixin(GenerateThis);
+    }
+
     class PublicClass
     {
         mixin(GenerateThis);
@@ -265,6 +271,8 @@ unittest
     static assert(__traits(getProtection, PrivateClass.__ctor) == "private");
     static assert(__traits(getProtection, ProtectedClass.__ctor) == "protected");
     static assert(__traits(getProtection, PackageClass.__ctor) == "package");
+    // getProtection does not return the package name of a package() attribute
+    // static assert(__traits(getProtection, SubPackageClass.__ctor) == `package(boilerplate)`);
     static assert(__traits(getProtection, PublicClass.__ctor) == "public");
 }
 
@@ -799,14 +807,18 @@ mixin template GenerateThisTemplate()
                 {
                     visibility = "protected";
                 }
-                static if (uda == This.Package)
-                {
-                    visibility = "package";
-                }
                 static if (uda == This.Private)
                 {
                     visibility = "private";
                 }
+            }
+            else static if (is(uda == This.Package))
+            {
+                visibility = "package";
+            }
+            else static if (is(typeof(uda) == This.Package))
+            {
+                visibility = "package(" ~ uda.packageMask ~ ")";
             }
         }
 
@@ -1079,7 +1091,6 @@ enum ThisEnum
 {
     Private,
     Protected,
-    Package,
     Exclude
 }
 
@@ -1087,7 +1098,10 @@ struct This
 {
     enum Private = ThisEnum.Private;
     enum Protected = ThisEnum.Protected;
-    enum Package = ThisEnum.Package;
+    struct Package
+    {
+        string packageMask = null;
+    }
     enum Exclude = ThisEnum.Exclude;
 
     // construct with value
