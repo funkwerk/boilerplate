@@ -1,30 +1,29 @@
 module boilerplate.builder;
 
-import std.format : format;
-import std.traits : Unqual;
 import std.typecons : Tuple;
 
 private alias Info = Tuple!(string, "typeField", string, "builderField");
 
 public alias Builder(T) = typeof(T.Builder());
 
-public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderProxy, alias toInfo_ = toInfo_)
+public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderProxy, alias _toInfo = _toInfo)
 {
     import boilerplate.util : Optional, formatNamed, removeTrailingUnderline;
     static import std.algorithm;
+    static import std.format;
     static import std.range;
-    import std.typecons : Nullable;
+    static import std.typecons;
 
     static assert(__traits(hasMember, T, "ConstructorInfo"));
 
     private enum fieldInfoList = std.range.array(
-        std.algorithm.map!toInfo_(
+        std.algorithm.map!_toInfo(
             std.range.zip(T.ConstructorInfo.fields,
                 std.algorithm.map!removeTrailingUnderline(T.ConstructorInfo.fields))));
 
     private template BuilderFieldInfo(string member)
     {
-        mixin(format!q{alias BaseType = T.ConstructorInfo.FieldInfo.%s.Type;}(member));
+        mixin(std.format.format!q{alias BaseType = T.ConstructorInfo.FieldInfo.%s.Type;}(member));
 
         // type has a builder ... that constructs it
         // protects from such IDIOTIC DESIGN ERRORS as `alias Nullable!T.get this`
@@ -51,8 +50,10 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
         return this.getError().isNull;
     }
 
-    public Nullable!string getError() const
+    public std.typecons.Nullable!string getError() const
     {
+        alias Nullable = std.typecons.Nullable;
+
         static foreach (info; fieldInfoList)
         {
             mixin(formatNamed!q{
@@ -61,14 +62,14 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
                     // if the proxy has never been used as a builder,
                     // ie. either a value was assigned or it was untouched
                     // then a default value may be used instead.
-                    if (this.%(builderField).isUnset && T.ConstructorInfo.FieldInfo.%(typeField).useDefault)
+                    if (this.%(builderField)._isUnset && T.ConstructorInfo.FieldInfo.%(typeField).useDefault)
                     {
                     }
                     else
                     {
-                        if (this.%(builderField).isBuilder)
+                        if (this.%(builderField)._isBuilder)
                         {
-                            auto subError = this.%(builderField).builder_.getError;
+                            auto subError = this.%(builderField)._builder.getError;
 
                             if (!subError.isNull)
                             {
@@ -110,17 +111,17 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
             mixin(formatNamed!q{
                 static if (BuilderFieldInfo!(info.typeField).isBuildable)
                 {
-                    if (this.%(builderField).isBuilder)
+                    if (this.%(builderField)._isBuilder)
                     {
-                        return this.%(builderField).builder_.value;
+                        return this.%(builderField)._builder.value;
                     }
-                    else if (this.%(builderField).isValue)
+                    else if (this.%(builderField)._isValue)
                     {
-                        return this.%(builderField).value_;
+                        return this.%(builderField)._value;
                     }
                     else
                     {
-                        assert(this.%(builderField).isUnset);
+                        assert(this.%(builderField)._isUnset);
 
                         static if (T.ConstructorInfo.FieldInfo.%(typeField).useDefault)
                         {
@@ -154,16 +155,16 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
         }
 
         enum getArgArray = std.range.array(
-            std.algorithm.map!(i => format!`getArg!(fieldInfoList[%s])`(i))(
+            std.algorithm.map!(i => std.format.format!`getArg!(fieldInfoList[%s])`(i))(
                 std.range.iota(fieldInfoList.length)));
 
         static if (is(T == class))
         {
-            return mixin(format!q{new T(%-(%s, %))}(getArgArray));
+            return mixin(std.format.format!q{new T(%-(%s, %))}(getArgArray));
         }
         else
         {
-            return mixin(format!q{T(%-(%s, %))}(getArgArray));
+            return mixin(std.format.format!q{T(%-(%s, %))}(getArgArray));
         }
     }
 
@@ -207,22 +208,22 @@ public struct BuilderProxy(T)
         this.data.value = value;
     }
 
-    package bool isUnset() const
+    public bool _isUnset() const
     {
         return this.mode == Mode.unset;
     }
 
-    package bool isValue() const
+    public bool _isValue() const
     {
         return this.mode == Mode.value;
     }
 
-    package bool isBuilder() const
+    public bool _isBuilder() const
     {
         return this.mode == Mode.builder;
     }
 
-    package inout(T) value_() inout
+    public inout(T) _value() inout
     in
     {
         assert(this.mode == Mode.value);
@@ -232,7 +233,7 @@ public struct BuilderProxy(T)
         return this.data.value;
     }
 
-    package ref auto builder_() inout
+    public ref auto _builder() inout
     in
     {
         assert(this.mode == Mode.builder);
@@ -242,9 +243,9 @@ public struct BuilderProxy(T)
         return this.data.builder;
     }
 
-    alias implicitBuilder_ this;
+    alias _implicitBuilder this;
 
-    public @property ref Builder!T implicitBuilder_()
+    public @property ref Builder!T _implicitBuilder()
     in
     {
         assert(
@@ -263,7 +264,7 @@ public struct BuilderProxy(T)
     }
 }
 
-public Info toInfo_(Tuple!(string, string) pair)
+public Info _toInfo(Tuple!(string, string) pair)
 {
     return Info(pair[0], pair[1]);
 }
