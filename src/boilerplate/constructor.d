@@ -774,6 +774,12 @@ enum SuperUseDefault_(string member)
 enum MemberUseDefault_(string member)
     = format!(`udaIndex!(This.Default, __traits(getAttributes, this.%s)) != -1`)(member);
 
+enum SuperAttributes_(string member)
+    = format!(`typeof(super).ConstructorInfo.FieldInfo.%s.attributes`)(member);
+
+enum MemberAttributes_(string member)
+    = format!(`__traits(getAttributes, this.%s)`)(member);
+
 mixin template GenerateThisTemplate()
 {
     private static generateThisImpl()
@@ -783,8 +789,12 @@ mixin template GenerateThisTemplate()
             return null;
         }
 
-        import boilerplate.constructor : GetMemberTypeAsString_, GetSuperTypeAsString_,
-            MemberDefault_, SuperDefault_, MemberUseDefault_, SuperUseDefault_, This;
+        import boilerplate.constructor :
+            GetMemberTypeAsString_, GetSuperTypeAsString_,
+            MemberDefault_, SuperDefault_,
+            MemberUseDefault_, SuperUseDefault_,
+            MemberAttributes_, SuperAttributes_,
+            This;
         import boilerplate.util : GenNormalMemberTuple, bucketSort, needToDup,
             reorder, udaIndex, removeTrailingUnderline;
         import std.algorithm : all, filter, map;
@@ -822,7 +832,7 @@ mixin template GenerateThisTemplate()
             }
         }
 
-        string[] attributes = ["pure", "nothrow", "@safe", "@nogc"];
+        string[] constructorAttributes = ["pure", "nothrow", "@safe", "@nogc"];
 
         static if (is(typeof(typeof(super).ConstructorInfo)))
         {
@@ -832,7 +842,7 @@ mixin template GenerateThisTemplate()
                 staticMap!(SuperPred, aliasSeqOf!(typeof(super).ConstructorInfo.fields)),
                 staticMap!(MemberPred, NormalMemberTuple)
             ]);
-            attributes = typeof(super).GeneratedConstructorAttributes_;
+            constructorAttributes = typeof(super).GeneratedConstructorAttributes_;
         }
         else
         {
@@ -854,6 +864,7 @@ mixin template GenerateThisTemplate()
         enum string[] useDefaults = CombinedArray!(SuperUseDefault_, MemberUseDefault_);
         enum string[] memberTypes = CombinedArray!(GetSuperTypeAsString_, GetMemberTypeAsString_);
         enum string[] defaults = CombinedArray!(SuperDefault_, MemberDefault_);
+        enum string[] attributes = CombinedArray!(SuperAttributes_, MemberAttributes_);
 
         string[] fields;
         string[] args;
@@ -861,6 +872,7 @@ mixin template GenerateThisTemplate()
         string[] defaultAssignments;
         bool[] fieldUseDefault;
         string[] fieldDefault;
+        string[] fieldAttributes;
         string[] types;
         string[] directInitFields;
         int[] directInitIndex;
@@ -935,13 +947,13 @@ mixin template GenerateThisTemplate()
                             enum lambdaAttributes = [__traits(getFunctionAttributes, initArg)];
                         }
 
-                        attributes = attributes.filter!(a => lambdaAttributes.canFind(a)).array;
+                        constructorAttributes = constructorAttributes.filter!(a => lambdaAttributes.canFind(a)).array;
                     }
                     else static if (nakedLambda)
                     {
                         enum lambdaAttributes = [__traits(getFunctionAttributes, initArg)];
 
-                        attributes = attributes.filter!(a => lambdaAttributes.canFind(a)).array;
+                        constructorAttributes = constructorAttributes.filter!(a => lambdaAttributes.canFind(a)).array;
                     }
                 }
 
@@ -959,7 +971,7 @@ mixin template GenerateThisTemplate()
 
             if (dupExpr)
             {
-                attributes = attributes.filter!(a => a != "@nogc").array;
+                constructorAttributes = constructorAttributes.filter!(a => a != "@nogc").array;
 
                 static if (isNullable)
                 {
@@ -977,6 +989,7 @@ mixin template GenerateThisTemplate()
             argexprs ~= argexpr;
             fieldUseDefault ~= useDefault;
             fieldDefault ~= defaults[i];
+            fieldAttributes ~= attributes[i];
             defaultAssignments ~= useDefault ? (` = ` ~ defaults[i]) : ``;
             types ~= passExprAsConst ? (`const ` ~ memberTypes[i]) : memberTypes[i];
         }
@@ -1003,11 +1016,9 @@ mixin template GenerateThisTemplate()
                 types.reorder(constructorFieldOrder),
                 fieldUseDefault.reorder(constructorFieldOrder),
                 fieldDefault.reorder(constructorFieldOrder),
-                fields.reorder(constructorFieldOrder)
-                    .map!(field => format!q{__traits(getAttributes, this.%s)}(field)),
+                fieldAttributes.reorder(constructorFieldOrder),
             )
-            .map!(args
-                => format!`ConstructorField!(%s, %s, %s, %s)`(args[0], args[1], args[2], args[3]))
+            .map!(args => format!`ConstructorField!(%s, %s, %s, %s)`(args[0], args[1], args[2], args[3]))
             .array
         );
 
@@ -1017,7 +1028,7 @@ mixin template GenerateThisTemplate()
                 ~ constructorFieldOrder
                     .map!(i => format!`%s %s%s`(types[i], args[i], defaultAssignments[i]))
                     .join(`, `)
-                ~ format!`) %-(%s %)`(attributes);
+                ~ format!`) %-(%s %)`(constructorAttributes);
 
             result ~= `{`;
 
@@ -1047,7 +1058,7 @@ mixin template GenerateThisTemplate()
             result ~= `}`;
 
             result ~= `protected static enum string[] GeneratedConstructorAttributes_ = [`
-                ~ attributes.map!(a => `"` ~ a ~ `"`).join(`, `)
+                ~ constructorAttributes.map!(a => `"` ~ a ~ `"`).join(`, `)
                 ~ `];`;
         }
 
