@@ -1,23 +1,26 @@
 module boilerplate.builder;
 
-import boilerplate.util;
-import std.algorithm : canFind, map;
 import std.format : format;
-import std.range : array, iota, zip;
 import std.traits : Unqual;
-import std.typecons : Nullable, Tuple;
+import std.typecons : Tuple;
 
 private alias Info = Tuple!(string, "typeField", string, "builderField");
 
-public struct Builder(T)
+public alias Builder(T) = typeof(T.Builder());
+
+public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderProxy, alias toInfo_ = toInfo_)
 {
+    import boilerplate.util : Optional, formatNamed, removeTrailingUnderline;
+    static import std.algorithm;
+    static import std.range;
+    import std.typecons : Nullable;
+
     static assert(__traits(hasMember, T, "ConstructorInfo"));
 
-    private enum fields = T.ConstructorInfo.fields;
-    private enum fieldInfoList = fields
-        .zip(fields.map!removeTrailingUnderline)
-        .map!toInfo_
-        .array;
+    private enum fieldInfoList = std.range.array(
+        std.algorithm.map!toInfo_(
+            std.range.zip(T.ConstructorInfo.fields,
+                std.algorithm.map!removeTrailingUnderline(T.ConstructorInfo.fields))));
 
     private template BuilderFieldInfo(string member)
     {
@@ -150,7 +153,9 @@ public struct Builder(T)
             }.values(info));
         }
 
-        enum getArgArray = fieldInfoList.length.iota.map!(i => format!`getArg!(fieldInfoList[%s])`(i)).array;
+        enum getArgArray = std.range.array(
+            std.algorithm.map!(i => format!`getArg!(fieldInfoList[%s])`(i))(
+                std.range.iota(fieldInfoList.length)));
 
         static if (is(T == class))
         {
@@ -162,7 +167,7 @@ public struct Builder(T)
         }
     }
 
-    static if (!fields.canFind("value"))
+    static if (!std.algorithm.canFind(T.ConstructorInfo.fields, "value"))
     {
         public alias value = builderValue;
     }

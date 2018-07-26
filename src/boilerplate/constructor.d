@@ -1051,10 +1051,16 @@ mixin template GenerateThisTemplate()
                 ~ `];`;
         }
 
-        result ~= `public static auto Builder()() {
-            import boilerplate.builder : Builder;
+        result ~= visibility ~ ` static struct BuilderType(alias T = typeof(this))
+        {
+            import boilerplate.builder : BuilderImpl;
 
-            return Builder!(typeof(this))();
+            mixin BuilderImpl!T;
+        }`;
+
+        result ~= visibility ~ ` static auto Builder()()
+        {
+            return BuilderType!()();
         }`;
 
         return result;
