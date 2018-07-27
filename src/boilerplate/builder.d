@@ -28,7 +28,7 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
         // type has a builder ... that constructs it
         // protects from such IDIOTIC DESIGN ERRORS as `alias Nullable!T.get this`
         static if (__traits(hasMember, BaseType, "Builder")
-            && is(typeof(BaseType.Builder().value) == BaseType))
+            && is(typeof(BaseType.Builder().builderValue()): BaseType))
         {
             alias Type = BuilderProxy!BaseType;
             enum isBuildable = true;
