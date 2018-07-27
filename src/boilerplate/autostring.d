@@ -338,23 +338,36 @@ unittest
 
 /++
 Fields that are arrays with a name that is the pluralization of the array base type are also unlabeled by default.
+But only if the array is NonEmpty! Otherwise, there would be no way to tell what the field contains.
 +/
 @("does not label fields with the same name as the type")
 unittest
 {
+    import boilerplate.conditions : NonEmpty;
+
     struct SomeValue { mixin(GenerateToString); }
     struct Entity { mixin(GenerateToString); }
     struct Day { mixin(GenerateToString); }
 
     struct Struct
     {
+        @NonEmpty
         SomeValue[] someValues;
+
+        @NonEmpty
         Entity[] entities;
+
         Day[] days;
+
         mixin(GenerateToString);
     }
 
-    Struct.init.to!string.shouldEqual("Struct([], [], [])");
+    auto value = Struct(
+        [SomeValue.init],
+        [Entity.init],
+        null);
+
+    value.to!string.shouldEqual("Struct([SomeValue()], [Entity()], days=[])");
 }
 
 /++
@@ -483,6 +496,7 @@ mixin template GenerateToStringTemplate()
         import std.string : endsWith, format, split, startsWith, strip;
         import std.traits : BaseClassesTuple, Unqual, getUDAs;
         import boilerplate.autostring : ToString, isMemberUnlabeledByDefault;
+        import boilerplate.conditions : NonEmpty;
         import boilerplate.util : GenNormalMemberTuple, udaIndex;
 
         // synchronized without lock contention is basically free, so always do it
@@ -654,6 +668,7 @@ mixin template GenerateToStringTemplate()
                     enum udaUnlabeled = udaIndex!(ToString.Unlabeled, __traits(getAttributes, symbol)) != -1;
                     enum udaOptional = udaIndex!(ToString.Optional, __traits(getAttributes, symbol)) != -1;
                     enum udaToStringHandler = udaIndex!(ToStringHandler, __traits(getAttributes, symbol)) != -1;
+                    enum udaNonEmpty = udaIndex!(NonEmpty, __traits(getAttributes, symbol)) != -1;
 
                     // see std.traits.isFunction!()
                     static if (is(symbol == function) || is(typeof(symbol) == function)
@@ -686,7 +701,7 @@ mixin template GenerateToStringTemplate()
                             labeled = false;
                         }
 
-                        if (isMemberUnlabeledByDefault!(Unqual!(typeof(symbol)))(memberName))
+                        if (isMemberUnlabeledByDefault!(Unqual!(typeof(symbol)))(memberName, udaNonEmpty))
                         {
                             labeled = false;
                         }
@@ -869,7 +884,7 @@ enum ToString
     Optional,
 }
 
-public bool isMemberUnlabeledByDefault(Type)(string field)
+public bool isMemberUnlabeledByDefault(Type)(string field, bool attribNonEmpty)
 {
     import std.string : toLower;
     import std.range.primitives : ElementType, isInputRange;
@@ -878,7 +893,7 @@ public bool isMemberUnlabeledByDefault(Type)(string field)
     {
         alias BaseType = ElementType!Type;
 
-        if (field.toLower == BaseType.stringof.toLower.pluralize)
+        if (field.toLower == BaseType.stringof.toLower.pluralize && attribNonEmpty)
         {
             return true;
         }
