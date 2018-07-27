@@ -28,7 +28,7 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
         // type has a builder ... that constructs it
         // protects from such IDIOTIC DESIGN ERRORS as `alias Nullable!T.get this`
         static if (__traits(hasMember, BaseType, "Builder")
-            && is(typeof(BaseType.Builder().builderValue()): BaseType))
+            && is(typeof(BaseType.Builder().builderValue): BaseType))
         {
             alias Type = BuilderProxy!BaseType;
             enum isBuildable = true;
@@ -113,7 +113,7 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
                 {
                     if (this.%(builderField)._isBuilder)
                     {
-                        return this.%(builderField)._builder.value;
+                        return this.%(builderField)._builder.builderValue;
                     }
                     else if (this.%(builderField)._isValue)
                     {
@@ -187,8 +187,8 @@ public struct BuilderProxy(T)
 
     private union Data
     {
-        Builder!T builder;
         T value;
+        Builder!T builder;
     }
 
     private Mode mode = Mode.unset;
@@ -204,8 +204,10 @@ public struct BuilderProxy(T)
     }
     do
     {
+        Data newData = Data(value);
+
         this.mode = Mode.value;
-        this.data.value = value;
+        this.data = newData;
     }
 
     public bool _isUnset() const
