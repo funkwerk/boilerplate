@@ -277,6 +277,45 @@ unittest
 }
 
 ///
+@("will assign the same scope to Builder")
+unittest
+{
+    @(This.Private)
+    class PrivateClass
+    {
+        mixin(GenerateThis);
+    }
+
+    @(This.Protected)
+    class ProtectedClass
+    {
+        mixin(GenerateThis);
+    }
+
+    @(This.Package)
+    class PackageClass
+    {
+        mixin(GenerateThis);
+    }
+
+    @(This.Package("boilerplate"))
+    class SubPackageClass
+    {
+        mixin(GenerateThis);
+    }
+
+    class PublicClass
+    {
+        mixin(GenerateThis);
+    }
+
+    static assert(__traits(getProtection, PrivateClass.Builder) == "private");
+    static assert(__traits(getProtection, ProtectedClass.Builder) == "protected");
+    static assert(__traits(getProtection, PackageClass.Builder) == "package");
+    static assert(__traits(getProtection, PublicClass.Builder) == "public");
+}
+
+///
 @("can use default tag with new")
 unittest
 {
