@@ -337,37 +337,59 @@ unittest
 }
 
 /++
-Fields that are arrays with a name that is the pluralization of the array base type are also unlabeled by default.
-But only if the array is NonEmpty! Otherwise, there would be no way to tell what the field contains.
+Fields that are arrays with a name that is the pluralization of the array base type are also unlabeled by default,
+as long as the array is NonEmpty. Otherwise, there would be no way to tell what the field contains.
 +/
 @("does not label fields with the same name as the type")
 unittest
 {
     import boilerplate.conditions : NonEmpty;
 
-    struct SomeValue { mixin(GenerateToString); }
+    struct Value { mixin(GenerateToString); }
     struct Entity { mixin(GenerateToString); }
     struct Day { mixin(GenerateToString); }
 
     struct Struct
     {
         @NonEmpty
-        SomeValue[] someValues;
+        Value[] values;
 
         @NonEmpty
         Entity[] entities;
 
+        @NonEmpty
         Day[] days;
 
         mixin(GenerateToString);
     }
 
     auto value = Struct(
-        [SomeValue.init],
-        [Entity.init],
-        null);
+        [Value()],
+        [Entity()],
+        [Day()]);
 
-    value.to!string.shouldEqual("Struct([SomeValue()], [Entity()], days=[])");
+    value.to!string.shouldEqual("Struct([Value()], [Entity()], [Day()])");
+}
+
+/++
+Fields that are not NonEmpty are always labeled.
+This is because they can be empty, in which case you can't tell what's in them from naming.
++/
+@("does label fields that may be empty")
+unittest
+{
+    import boilerplate.conditions : NonEmpty;
+
+    struct Value { mixin(GenerateToString); }
+
+    struct Struct
+    {
+        Value[] values;
+
+        mixin(GenerateToString);
+    }
+
+    Struct(null).to!string.shouldEqual("Struct(values=[])");
 }
 
 /++
