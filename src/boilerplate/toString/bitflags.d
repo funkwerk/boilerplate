@@ -2,39 +2,35 @@ module boilerplate.toString.bitflags;
 
 import std.typecons : BitFlags;
 
-void toString(T)(const T field, scope void delegate(const(char)[]) sink)
-if (is(T: const BitFlags!Enum, Enum))
+void toString(T: const BitFlags!Enum, Enum)(const T field, scope void delegate(const(char)[]) sink)
 {
-    static if (is(T: const BitFlags!Enum, Enum))
+    import std.conv : to;
+    import std.traits : EnumMembers;
+
+    bool firstMember = true;
+
+    sink(Enum.stringof);
+    sink("(");
+
+    static foreach (member; EnumMembers!Enum)
     {
-        import std.conv : to;
-        import std.traits : EnumMembers;
-
-        bool firstMember = true;
-
-        sink(Enum.stringof);
-        sink("(");
-
-        static foreach (member; EnumMembers!Enum)
+        if (field & member)
         {
-            if (field & member)
+            if (firstMember)
             {
-                if (firstMember)
-                {
-                    firstMember = false;
-                }
-                else
-                {
-                    sink(", ");
-                }
-
-                enum name = to!string(member);
-
-                sink(name);
+                firstMember = false;
             }
+            else
+            {
+                sink(", ");
+            }
+
+            enum name = to!string(member);
+
+            sink(name);
         }
-        sink(")");
     }
+    sink(")");
 }
 
 @("can format bitflags")
@@ -44,7 +40,7 @@ unittest
 
     string generatedString;
 
-    scope void delegate(const(char)[]) sink = (const(char)[] fragment) {
+    scope sink = (const(char)[] fragment) {
         generatedString ~= fragment;
     };
 

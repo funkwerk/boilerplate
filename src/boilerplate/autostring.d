@@ -476,7 +476,6 @@ unittest
     }
 
     Struct.init.to!string.shouldEqual("Struct()");
-    Struct(BitFlags!Enum(Enum.A, Enum.B)).to!string.shouldEqual("Struct(field=Enum(A, B))");
 }
 
 mixin template GenerateToStringTemplate()
