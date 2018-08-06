@@ -836,7 +836,7 @@ mixin template GenerateThisTemplate()
             This;
         import boilerplate.util : GenNormalMemberTuple, bucketSort, needToDup,
             reorder, udaIndex, removeTrailingUnderline;
-        import std.algorithm : all, filter, map;
+        import std.algorithm : all, canFind, filter, map;
         import std.meta : Alias, aliasSeqOf, staticMap;
         import std.range : array, drop, iota, zip;
         import std.string : endsWith, format, join;
