@@ -926,7 +926,7 @@ mixin template GenerateThisTemplate()
 
             bool includeMember = false;
 
-            enum isNullable = mixin(format!`is(%s: Nullable!Args, Args...)`(memberTypes[i]));
+            enum isNullable = is(Type: Nullable!Arg, Arg);
 
             static if (!isNullable)
             {
@@ -955,12 +955,7 @@ mixin template GenerateThisTemplate()
 
                 import boilerplate.util: isStatic;
 
-                includeMember = true;
-
-                if (mixin(isStatic(member)))
-                {
-                    includeMember = false;
-                }
+                includeMember = !mixin(isStatic(member));
 
                 static if (udaIndex!(This.Init, __traits(getAttributes, symbol)) != -1)
                 {
@@ -1004,7 +999,7 @@ mixin template GenerateThisTemplate()
 
             if (!includeMember) continue;
 
-            string paramName = member.removeTrailingUnderline;
+            enum paramName = member.removeTrailingUnderline;
 
             string argexpr = paramName;
 
