@@ -62,21 +62,24 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
                     // if the proxy has never been used as a builder,
                     // ie. either a value was assigned or it was untouched
                     // then a default value may be used instead.
-                    if (this.%(builderField)._isUnset && T.ConstructorInfo.FieldInfo.%(typeField).useDefault)
+                    if (this.%(builderField)._isUnset)
                     {
-                    }
-                    else
-                    {
-                        if (this.%(builderField)._isBuilder)
+                        static if (!T.ConstructorInfo.FieldInfo.%(typeField).useDefault)
                         {
-                            auto subError = this.%(builderField)._builder.getError;
-
-                            if (!subError.isNull)
-                            {
-                                return Nullable!string(subError.get ~ " of " ~ T.stringof);
-                            }
+                            return Nullable!string(
+                                "required field '%(builderField)' not set in builder of " ~ T.stringof);
                         }
                     }
+                    else if (this.%(builderField)._isBuilder)
+                    {
+                        auto subError = this.%(builderField)._builder.getError;
+
+                        if (!subError.isNull)
+                        {
+                            return Nullable!string(subError.get ~ " of " ~ T.stringof);
+                        }
+                    }
+                    // else it carries a full value.
                 }
                 else
                 {
