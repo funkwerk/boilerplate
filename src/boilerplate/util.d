@@ -418,7 +418,8 @@ public struct Optional(T)
         this.isNull = false;
     }
 
-    public inout(T) get() inout
+    // This method should only be called from Builder.value! Builder fields are semantically write-only.
+    public inout(T) _get() inout
     in
     {
         assert(!this.isNull);
@@ -453,7 +454,7 @@ public struct Optional(T)
         {
             this = T.init;
         }
-        mixin("this = this.get " ~ op ~ " rhs;");
+        mixin("this = this._get " ~ op ~ " rhs;");
     }
 
     static if (is(T: Nullable!Arg, Arg))
@@ -486,11 +487,11 @@ unittest
     intArrayOptional ~= 5;
 
     assert(!intArrayOptional.isNull);
-    assert(intArrayOptional.get == [5]);
+    assert(intArrayOptional._get == [5]);
 
     intArrayOptional ~= 6;
 
-    assert(intArrayOptional.get == [5, 6]);
+    assert(intArrayOptional._get == [5, 6]);
 }
 
 private template SafeUnqual(T)

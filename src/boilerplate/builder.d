@@ -137,7 +137,7 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
                 {
                     if (!this.%(builderField).isNull)
                     {
-                        return this.%(builderField).get;
+                        return this.%(builderField)._get;
                     }
                     else
                     {

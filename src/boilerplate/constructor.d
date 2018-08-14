@@ -796,6 +796,31 @@ unittest
     }
 }
 
+///
+@("builder supports reconstruction from value")
+unittest
+{
+    import std.typecons : Nullable, nullable;
+
+    struct Struct
+    {
+        private int a_;
+
+        int[] b;
+
+        mixin(GenerateThis);
+    }
+
+    const originalValue = Struct(2, [3]);
+
+    with (originalValue.BuilderFrom())
+    {
+        a = 5;
+
+        value.shouldEqual(Struct(5, [3]));
+    }
+}
+
 import std.string : format;
 
 enum GetSuperTypeAsString_(string member) = format!`typeof(super).ConstructorInfo.FieldInfo.%s.Type`(member);
@@ -1106,6 +1131,19 @@ mixin template GenerateThisTemplate()
         result ~= visibility ~ ` static auto Builder()()
         {
             return BuilderType!()();
+        }`;
+
+        result ~= visibility ~ ` auto BuilderFrom()() const
+        {
+            import boilerplate.util : removeTrailingUnderline;
+
+            auto builder = BuilderType!()();
+
+            static foreach (field; ConstructorInfo.fields)
+            {
+                mixin("builder." ~ field.removeTrailingUnderline ~ " = this." ~ field ~ ";");
+            }
+            return builder;
         }`;
 
         return result;
