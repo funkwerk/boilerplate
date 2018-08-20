@@ -198,6 +198,11 @@ public struct BuilderProxy(T)
 
     private Data data;
 
+    public this(T value)
+    {
+        opAssign(value);
+    }
+
     public void opAssign(T value)
     in
     {
