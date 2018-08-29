@@ -340,7 +340,7 @@ unittest
 Fields that are arrays with a name that is the pluralization of the array base type are also unlabeled by default,
 as long as the array is NonEmpty. Otherwise, there would be no way to tell what the field contains.
 +/
-@("does not label fields with the same name as the type")
+@("does not label fields named a plural of the basetype, if the type is an array")
 unittest
 {
     import boilerplate.conditions : NonEmpty;
@@ -369,6 +369,29 @@ unittest
         [Day()]);
 
     value.to!string.shouldEqual("Struct([Value()], [Entity()], [Day()])");
+}
+
+@("does not label fields named a plural of the basetype, if the type is a BitFlags")
+unittest
+{
+    import std.typecons : BitFlags;
+
+    enum Flag
+    {
+        A = 1 << 0,
+        B = 1 << 1,
+    }
+
+    struct Struct
+    {
+        BitFlags!Flag flags;
+
+        mixin(GenerateToString);
+    }
+
+    auto value = Struct(BitFlags!Flag(Flag.A, Flag.B));
+
+    value.to!string.shouldEqual("Struct(Flag(A, B))");
 }
 
 /++
@@ -938,12 +961,20 @@ public bool isMemberUnlabeledByDefault(Type)(string field, bool attribNonEmpty)
 {
     import std.string : toLower;
     import std.range.primitives : ElementType, isInputRange;
+    import std.typecons : BitFlags;
 
     static if (isInputRange!Type)
     {
         alias BaseType = ElementType!Type;
 
         if (field.toLower == BaseType.stringof.toLower.pluralize && attribNonEmpty)
+        {
+            return true;
+        }
+    }
+    else static if (is(Type: const BitFlags!BaseType, BaseType))
+    {
+        if (field.toLower == BaseType.stringof.toLower.pluralize)
         {
             return true;
         }
