@@ -501,6 +501,33 @@ unittest
     Struct.init.to!string.shouldEqual("Struct()");
 }
 
+@("prints hashmaps in deterministic order")
+unittest
+{
+    import std.typecons : BitFlags;
+
+    struct Struct
+    {
+        string[string] map;
+
+        mixin(GenerateToString);
+    }
+
+    enum key1 = "opstop", key2 = "foo"; // collide
+
+    const first = Struct([key1: null, key2: null]);
+    string[string] backwardsHashmap;
+
+    backwardsHashmap[key2] = null;
+    backwardsHashmap[key1] = null;
+
+    const second = Struct(backwardsHashmap);
+
+    assert(first.map.keys != second.map.keys);
+
+    first.to!string.shouldEqual(second.to!string);
+}
+
 mixin template GenerateToStringTemplate()
 {
 
@@ -657,7 +684,7 @@ mixin template GenerateToStringTemplate()
                 static if (isObject && alreadyHaveVoidToString) result ~= `override `;
 
                 result ~= `public void toString(scope void delegate(const(char)[]) sink) const {`
-                    ~ `import boilerplate.autostring: ToStringHandler;`
+                    ~ `import boilerplate.autostring: orderedAssociativeArray, ToStringHandler;`
                     ~ `import boilerplate.util: sinkWrite;`
                     ~ `import std.traits: getUDAs;`;
 
@@ -797,6 +824,11 @@ mixin template GenerateToStringTemplate()
                             {
                                 return `static assert(false, "cannot determine how to call ToStringHandler");`;
                             }
+                        }
+
+                        static if (__traits(isAssociativeArray, symbol))
+                        {
+                            membervalue = `orderedAssociativeArray(` ~ membervalue ~ `)`;
                         }
 
                         string writestmt;
@@ -955,6 +987,31 @@ enum ToString
     Exclude,
     Include,
     Optional,
+}
+
+public auto orderedAssociativeArray(T : V[K], K, V)(T associativeArray)
+{
+    static struct OrderedAssociativeArray
+    {
+        private T associativeArray;
+
+        public void toString(scope void delegate(const(char)[]) sink) const {
+            import std.algorithm : sort;
+            import std.format : formattedWrite;
+            import std.typecons : Rebindable;
+
+            Rebindable!V[K] copiedArray;
+
+            foreach (key; this.associativeArray.keys.sort)
+            {
+                copiedArray[key] = this.associativeArray[key];
+            }
+
+            formattedWrite!"%s"(sink, copiedArray);
+        }
+    }
+
+    return OrderedAssociativeArray(associativeArray);
 }
 
 public bool isMemberUnlabeledByDefault(Type)(string field, bool attribNonEmpty)
