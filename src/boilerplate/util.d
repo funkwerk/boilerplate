@@ -270,57 +270,63 @@ void sinkWrite(T...)(scope void delegate(const(char)[]) sink, ref bool comma, bo
         alias PlainT = typeof(cast() arg);
 
         enum isNullable = is(PlainT: Nullable!Arg, Arg);
-
-        static if (isNullable)
-        {
-            if (!arg.isNull)
-            {
-                sink.sinkWrite(comma, escapeStrings, fmt, arg.get);
-            }
-            return;
-        }
+    }
+    else
+    {
+        enum isNullable = false;
     }
 
-    auto replaceArg(int i)()
-    if (i >= 0 && i < T.length)
+    static if (isNullable)
     {
-        alias PlainT = typeof(cast() args[i]);
-
-        static if (is(PlainT == SysTime))
+        if (!arg.isNull)
         {
-            static struct SysTimeInitWrapper
-            {
-                const typeof(args[i]) arg;
+            sink.sinkWrite(comma, escapeStrings, fmt, arg.get);
+        }
+        return;
+    }
+    else
+    {
+        auto replaceArg(int i)()
+        if (i >= 0 && i < T.length)
+        {
+            alias PlainT = typeof(cast() args[i]);
 
-                void toString(scope void delegate(const(char)[]) sink) const
+            static if (is(PlainT == SysTime))
+            {
+                static struct SysTimeInitWrapper
                 {
-                    if (this.arg is SysTime.init) // crashes on toString
+                    const typeof(args[i]) arg;
+
+                    void toString(scope void delegate(const(char)[]) sink) const
                     {
-                        sink("SysTime.init");
-                    }
-                    else
-                    {
-                        wrapFormatType(this.arg, false).toString(sink);
+                        if (this.arg is SysTime.init) // crashes on toString
+                        {
+                            sink("SysTime.init");
+                        }
+                        else
+                        {
+                            wrapFormatType(this.arg, false).toString(sink);
+                        }
                     }
                 }
+
+                return SysTimeInitWrapper(args[i]);
             }
-
-            return SysTimeInitWrapper(args[i]);
+            else
+            {
+                return wrapFormatType(args[i], escapeStrings);
+            }
         }
-        else
+
+        if (comma)
         {
-            return wrapFormatType(args[i], escapeStrings);
+            sink(", ");
         }
+
+        comma = true;
+
+        mixin(`sink.formattedWrite(fmt, ` ~ T.length.iota.map!(i => format!"replaceArg!%s"(i)).join(", ") ~ `);`);
     }
-
-    if (comma)
-    {
-        sink(", ");
-    }
-
-    comma = true;
-
-    mixin(`sink.formattedWrite(fmt, ` ~ T.length.iota.map!(i => format!"replaceArg!%s"(i)).join(", ") ~ `);`);
 }
 
 private auto wrapFormatType(T)(T value, bool escapeStrings)
