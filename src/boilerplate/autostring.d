@@ -88,7 +88,7 @@ unittest
     }
 
     Struct.init.to!string.shouldEqual("Struct()");
-    Struct(2, "hi", new Class).to!string.shouldEqual("Struct(a=2, s=hi, obj=Class())");
+    Struct(2, "hi", new Class).to!string.shouldEqual(`Struct(a=2, s="hi", obj=Class())`);
     Struct(0, "", null).to!string.shouldEqual("Struct()");
 }
 
@@ -504,8 +504,6 @@ unittest
 @("prints hashmaps in deterministic order")
 unittest
 {
-    import std.typecons : BitFlags;
-
     struct Struct
     {
         string[string] map;
@@ -526,6 +524,24 @@ unittest
     assert(first.map.keys != second.map.keys);
 
     first.to!string.shouldEqual(second.to!string);
+}
+
+@("applies custom formatters to types in hashmaps")
+unittest
+{
+    import std.datetime : SysTime;
+
+    struct Struct
+    {
+        SysTime[string] map;
+
+        mixin(GenerateToString);
+    }
+
+    const expected = "2003-02-01T11:55:00Z";
+    const value = Struct(["foo": SysTime.fromISOExtString(expected)]);
+
+    value.to!string.shouldEqual(`Struct(map=["foo": ` ~ expected ~ `])`);
 }
 
 mixin template GenerateToStringTemplate()
@@ -684,7 +700,7 @@ mixin template GenerateToStringTemplate()
                 static if (isObject && alreadyHaveVoidToString) result ~= `override `;
 
                 result ~= `public void toString(scope void delegate(const(char)[]) sink) const {`
-                    ~ `import boilerplate.autostring: orderedAssociativeArray, ToStringHandler;`
+                    ~ `import boilerplate.autostring: ToStringHandler;`
                     ~ `import boilerplate.util: sinkWrite;`
                     ~ `import std.traits: getUDAs;`;
 
@@ -808,6 +824,8 @@ mixin template GenerateToStringTemplate()
 
                         string membervalue = `this.` ~ member;
 
+                        bool escapeStrings = true;
+
                         static if (udaToStringHandler)
                         {
                             alias Handlers = getUDAs!(symbol, ToStringHandler);
@@ -819,6 +837,8 @@ mixin template GenerateToStringTemplate()
                                 membervalue = `getUDAs!(this.` ~ member ~ `, ToStringHandler)[0].Handler(`
                                     ~ membervalue
                                     ~ `)`;
+
+                                escapeStrings = false;
                             }
                             else
                             {
@@ -826,21 +846,16 @@ mixin template GenerateToStringTemplate()
                             }
                         }
 
-                        static if (__traits(isAssociativeArray, symbol))
-                        {
-                            membervalue = `orderedAssociativeArray(` ~ membervalue ~ `)`;
-                        }
-
                         string writestmt;
 
                         if (labeled)
                         {
-                            writestmt = format!`sink.sinkWrite(comma, "%s=%%s", %s);`
-                                (memberName, membervalue);
+                            writestmt = format!`sink.sinkWrite(comma, %s, "%s=%%s", %s);`
+                                (escapeStrings, memberName, membervalue);
                         }
                         else
                         {
-                            writestmt = format!`sink.sinkWrite(comma, "%%s", %s);`(membervalue);
+                            writestmt = format!`sink.sinkWrite(comma, %s, "%%s", %s);`(escapeStrings, membervalue);
                         }
 
                         static if (udaOptional)
@@ -987,31 +1002,6 @@ enum ToString
     Exclude,
     Include,
     Optional,
-}
-
-public auto orderedAssociativeArray(T : V[K], K, V)(T associativeArray)
-{
-    static struct OrderedAssociativeArray
-    {
-        private T associativeArray;
-
-        public void toString(scope void delegate(const(char)[]) sink) const {
-            import std.algorithm : sort;
-            import std.format : formattedWrite;
-            import std.typecons : Rebindable;
-
-            Rebindable!V[K] copiedArray;
-
-            foreach (key; this.associativeArray.keys.sort)
-            {
-                copiedArray[key] = this.associativeArray[key];
-            }
-
-            formattedWrite!"%s"(sink, copiedArray);
-        }
-    }
-
-    return OrderedAssociativeArray(associativeArray);
 }
 
 public bool isMemberUnlabeledByDefault(Type)(string field, bool attribNonEmpty)

@@ -4,6 +4,18 @@ import std.meta;
 import std.range : iota;
 import std.traits;
 
+static if (__traits(compiles, { import config.string : toString; }))
+{
+    import config.string : customToString = toString;
+}
+else
+{
+    private void customToString(T)()
+    if (false)
+    {
+    }
+}
+
 enum needToDup(T) = isArray!(T) && !DeepConst!(T);
 
 enum DeepConst(T) = __traits(compiles, (const T x) { T y = x; });
@@ -243,69 +255,149 @@ T[] bucketSort(T)(T[] inputArray, size_t delegate(T) rankfn)
     return buckets.joiner.array;
 }
 
-void sinkWrite(T)(scope void delegate(const(char)[]) sink, ref bool comma, string fmt, T arg)
+void sinkWrite(T...)(scope void delegate(const(char)[]) sink, ref bool comma, bool escapeStrings, string fmt, T args)
 {
-	static if (__traits(compiles, { import config.string : toString; }))
-	{
-		import config.string : customToString = toString;
-	}
-	else
-	{
-		void customToString(T)()
-		if (false)
-		{
-		}
-	}
-
+    import std.algorithm : map;
     import std.datetime : SysTime;
-    import std.format : formattedWrite;
+    import std.format : format, formattedWrite;
+    import std.string : join;
     import std.typecons : Nullable;
 
-    alias PlainT = typeof(cast() arg);
-
-    enum isNullable = is(PlainT: Nullable!Args, Args...);
-
-    static if (isNullable)
+    static if (T.length == 1) // check for optional field: single Nullable
     {
-        if (!arg.isNull)
+        const arg = args[0];
+
+        alias PlainT = typeof(cast() arg);
+
+        enum isNullable = is(PlainT: Nullable!Arg, Arg);
+
+        static if (isNullable)
         {
-            sinkWrite(sink, comma, fmt, arg.get);
+            if (!arg.isNull)
+            {
+                sink.sinkWrite(comma, escapeStrings, fmt, arg.get);
+            }
+            return;
         }
-        return;
     }
-    else
+
+    auto replaceArg(int i)()
+    if (i >= 0 && i < T.length)
     {
+        alias PlainT = typeof(cast() args[i]);
+
         static if (is(PlainT == SysTime))
         {
-            if (arg == SysTime.init) // crashes on toString
+            static struct SysTimeInitWrapper
             {
-                return;
-            }
-        }
+                const typeof(args[i]) arg;
 
-        if (comma)
-        {
-            sink(", ");
-        }
-
-        comma = true;
-
-        static if (__traits(compiles, customToString(arg, sink)))
-        {
-            struct TypeWrapper
-            {
                 void toString(scope void delegate(const(char)[]) sink) const
                 {
-                    customToString(arg, sink);
+                    if (this.arg is SysTime.init) // crashes on toString
+                    {
+                        sink("SysTime.init");
+                    }
+                    else
+                    {
+                        wrapFormatType(this.arg, false).toString(sink);
+                    }
                 }
             }
-            sink.formattedWrite(fmt, TypeWrapper());
+
+            return SysTimeInitWrapper(args[i]);
         }
         else
         {
-            sink.formattedWrite(fmt, arg);
+            return wrapFormatType(args[i], escapeStrings);
         }
     }
+
+    if (comma)
+    {
+        sink(", ");
+    }
+
+    comma = true;
+
+    mixin(`sink.formattedWrite(fmt, ` ~ T.length.iota.map!(i => format!"replaceArg!%s"(i)).join(", ") ~ `);`);
+}
+
+private auto wrapFormatType(T)(T value, bool escapeStrings)
+{
+    import std.traits : isSomeString;
+
+    static if (__traits(compiles, customToString(value, (void delegate(const(char)[])).init)))
+    {
+        static struct CustomToStringWrapper
+        {
+            T value;
+
+            void toString(scope void delegate(const(char)[]) sink) const
+            {
+                customToString(this.value, sink);
+            }
+        }
+        return CustomToStringWrapper(value);
+    }
+    else static if (is(T : V[K], K, V))
+    {
+        return orderedAssociativeArray(value);
+    }
+    else static if (isSomeString!T)
+    {
+        static struct QuoteStringWrapper
+        {
+            T value;
+
+            bool escapeStrings;
+
+            void toString(scope void delegate(const(char)[]) sink) const
+            {
+                import std.format : formattedWrite;
+                import std.range : only;
+
+                if (escapeStrings)
+                {
+                    sink.formattedWrite!"%(%s%)"(this.value.only);
+                }
+                else
+                {
+                    sink.formattedWrite!"%s"(this.value);
+                }
+            }
+        }
+
+        return QuoteStringWrapper(value, escapeStrings);
+    }
+    else
+    {
+        return value;
+    }
+}
+
+private auto orderedAssociativeArray(T : V[K], K, V)(T associativeArray)
+{
+    static struct OrderedAssociativeArray
+    {
+        T associativeArray;
+
+        public void toString(scope void delegate(const(char)[]) sink) const
+        {
+            import std.algorithm : sort;
+            sink("[");
+
+            bool comma = false;
+
+            foreach (key; this.associativeArray.keys.sort)
+            {
+                sink.sinkWrite(comma, true, "%s: %s", key, this.associativeArray[key]);
+            }
+            sink("]");
+        }
+    }
+
+    return OrderedAssociativeArray(associativeArray);
 }
 
 private string quote(string text)
