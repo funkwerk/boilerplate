@@ -1,9 +1,10 @@
 module boilerplate.accessors;
 
+import boilerplate.conditions : IsConditionAttribute, generateChecksForAttributes;
+import boilerplate.util: DeepConst, isStatic;
+import std.meta : StdMetaFilter = Filter;
 import std.traits;
 import std.typecons: Nullable;
-
-import boilerplate.util: DeepConst, isStatic;
 
 struct Read
 {
@@ -52,7 +53,7 @@ public static string GenerateFieldDecls_(FieldType, Attributes...)
 
     static if (udaIndex!(Read, Attributes) != -1)
     {
-        string readerDecl = GenerateReader!(FieldType)(
+        string readerDecl = GenerateReader!(FieldType, Attributes)(
             name, fieldIsStatic, fieldIsUnsafe, synchronize);
 
         debug (accessors) pragma(msg, readerDecl);
@@ -72,8 +73,8 @@ public static string GenerateFieldDecls_(FieldType, Attributes...)
 
     static if (udaIndex!(ConstRead, Attributes) != -1)
     {
-        string constReaderDecl = GenerateConstReader!(FieldType)
-            (name, fieldIsStatic, synchronize);
+        string constReaderDecl = GenerateConstReader!(FieldType, Attributes)
+            (name, fieldIsStatic, fieldIsUnsafe, synchronize);
 
         debug (accessors) pragma(msg, constReaderDecl);
         result ~= constReaderDecl;
@@ -168,7 +169,7 @@ enum FilterMode
     Writer,
 }
 
-string GenerateReader(T)(string name, bool fieldIsStatic, bool fieldIsUnsafe, bool synchronize)
+string GenerateReader(T, Attributes...)(string name, bool fieldIsStatic, bool fieldIsUnsafe, bool synchronize)
 {
     import boilerplate.util : needToDup;
     import std.string : format;
@@ -209,11 +210,22 @@ string GenerateReader(T)(string name, bool fieldIsStatic, bool fieldIsUnsafe, bo
 
     if (!fieldIsStatic)
     {
-        attributesString ~= "inout ";
+        attributesString ~= " inout";
     }
 
-    return format!("%s%s final @property auto %s() %s{ %s }")
-                (visibility, modifiers, accessorName, attributesString, accessor_body);
+    string outCondition = "";
+
+    if (fieldIsStatic)
+    {
+        if (auto checks = generateChecksForAttributes!(T, StdMetaFilter!(IsConditionAttribute, Attributes))
+            ("result", " in postcondition of @Read"))
+        {
+            outCondition = format!` out(result) { %s } body`(checks);
+        }
+    }
+
+    return format!("%s%s final @property auto %s()%s%s { %s }")
+                (visibility, modifiers, accessorName, attributesString, outCondition, accessor_body);
 }
 
 @("generates readers as expected")
@@ -278,7 +290,7 @@ string GenerateRefReader(T)(string name, bool isStatic)
         "@nogc nothrow @safe { return this.foo; }");
 }
 
-string GenerateConstReader(T)(string name, bool isStatic, bool synchronize)
+string GenerateConstReader(T, Attributes...)(string name, bool isStatic, bool isUnsafe, bool synchronize)
 {
     import std.string : format;
 
@@ -286,7 +298,9 @@ string GenerateConstReader(T)(string name, bool isStatic, bool synchronize)
     auto accessorName = accessor(name);
     enum visibility = getVisibility!(ConstRead, __traits(getAttributes, example));
 
-    alias attributes = inferAttributes!(T, "__postblit");
+    uint attributes = inferAttributes!(T, "__postblit") &
+        filterAttributes!T(isStatic, isUnsafe, FilterMode.Reader);
+
     string attributesString = generateAttributeString(attributes);
 
     string accessor_body = format!`return this.%s; `(name);
@@ -296,16 +310,30 @@ string GenerateConstReader(T)(string name, bool isStatic, bool synchronize)
         accessor_body = format!`synchronized (this) { %s} `(accessor_body);
     }
 
-    return format("%s final @property auto %s() const %s { %s}",
-        visibility, accessorName, attributesString, accessor_body);
+    auto modifiers = getModifiers(isStatic);
+
+    if (isStatic)
+    {
+        string outCondition = "";
+
+        if (auto checks = generateChecksForAttributes!(T, StdMetaFilter!(IsConditionAttribute, Attributes))
+            ("result", " in postcondition of @ConstRead"))
+        {
+            outCondition = format!` out(result) { %s } body`(checks);
+        }
+
+        return format("%s%s final @property const(typeof(%s)) %s()%s%s { %s}",
+            visibility, modifiers, name, accessorName, attributesString, outCondition, accessor_body);
+    }
+
+    return format("%s%s final @property auto %s() const%s { %s}",
+        visibility, modifiers, accessorName, attributesString, accessor_body);
 }
 
 string GenerateWriter(T, Attributes...)(string name, string fieldCode, bool isStatic, bool isUnsafe, bool synchronize)
 {
-    import boilerplate.conditions : IsConditionAttribute, generateChecksForAttributes;
     import boilerplate.util : needToDup;
     import std.algorithm : canFind;
-    import std.meta : StdMetaFilter = Filter;
     import std.string : format;
 
     auto example = T.init;
@@ -325,7 +353,7 @@ string GenerateWriter(T, Attributes...)(string name, string fieldCode, bool isSt
     if (auto checks = generateChecksForAttributes!(T, StdMetaFilter!(IsConditionAttribute, Attributes))
         (inputName, " in precondition of @Write"))
     {
-        precondition = format!`in { import std.format : format; import std.array : empty; %s } body `(checks);
+        precondition = format!` in { import std.format : format; import std.array : empty; %s } body`(checks);
         attributes &= ~FunctionAttribute.nogc;
         attributes &= ~FunctionAttribute.nothrow_;
         // format() is neither pure nor safe
@@ -346,7 +374,7 @@ string GenerateWriter(T, Attributes...)(string name, string fieldCode, bool isSt
         accessor_body = format!`synchronized (this) { %s} `(accessor_body);
     }
 
-    return format("%s%s final @property void %s(typeof(%s) %s) %s%s{ %s}",
+    return format("%s%s final @property void %s(typeof(%s) %s)%s%s { %s}",
         visibility, modifiers, accessorName, fieldCode, inputName,
         attributesString, precondition, accessor_body);
 }
@@ -432,19 +460,19 @@ private string generateAttributeString(uint attributes)
 
     if (attributes & FunctionAttribute.nogc)
     {
-        attributesString ~= "@nogc ";
+        attributesString ~= " @nogc";
     }
     if (attributes & FunctionAttribute.nothrow_)
     {
-        attributesString ~= "nothrow ";
+        attributesString ~= " nothrow";
     }
     if (attributes & FunctionAttribute.pure_)
     {
-        attributesString ~= "pure ";
+        attributesString ~= " pure";
     }
     if (attributes & FunctionAttribute.safe)
     {
-        attributesString ~= "@safe ";
+        attributesString ~= " @safe";
     }
 
     return attributesString;
@@ -1049,4 +1077,28 @@ unittest
     auto error = ({ thing.objects = [null]; })().shouldThrow!AssertError;
 
     assert(error.to!string.canFind("in precondition"));
+}
+
+@("generates out conditions for invariant tags on static accessors")
+unittest
+{
+    import boilerplate.conditions : NonInit;
+    import core.exception : AssertError;
+    import unit_threaded.should : shouldThrow;
+
+    struct Struct
+    {
+        @Read
+        @NonInit
+        static int test_;
+
+        @ConstRead
+        @NonInit
+        static int test2_;
+
+        mixin(GenerateFieldAccessors);
+    }
+
+    Struct.test.shouldThrow!AssertError;
+    Struct.test2.shouldThrow!AssertError;
 }
