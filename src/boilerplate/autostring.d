@@ -544,6 +544,25 @@ unittest
     value.to!string.shouldEqual(`Struct(map=["foo": ` ~ expected ~ `])`);
 }
 
+@("can format associative array of Nullable SysTime")
+unittest
+{
+    import std.datetime : SysTime;
+    import std.typecons : Nullable;
+
+    struct Struct
+    {
+        Nullable!SysTime[string] map;
+
+        mixin(GenerateToString);
+    }
+
+    const expected = `Struct(map=["foo": null])`;
+    const value = Struct(["foo": Nullable!SysTime()]);
+
+    value.to!string.shouldEqual(expected);
+}
+
 mixin template GenerateToStringTemplate()
 {
 

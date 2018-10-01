@@ -332,8 +332,34 @@ void sinkWrite(T...)(scope void delegate(const(char)[]) sink, ref bool comma, bo
 private auto wrapFormatType(T)(T value, bool escapeStrings)
 {
     import std.traits : isSomeString;
+    import std.typecons : Nullable;
 
-    static if (__traits(compiles, customToString(value, (void delegate(const(char)[])).init)))
+    // for Nullable types, we cannot distinguish between a custom handler that takes Nullable!Arg
+    // and one that takes Arg via alias get this. So handlers that take Nullable are impossible, since we
+    // need to handle it here to avoid crashes.
+    static if (is(T: Nullable!Arg, Arg))
+    {
+        static struct NullableWrapper
+        {
+            T value;
+
+            bool escapeStrings;
+
+            void toString(scope void delegate(const(char)[]) sink) const
+            {
+                if (this.value.isNull)
+                {
+                    sink("null");
+                }
+                else
+                {
+                    wrapFormatType(this.value.get, escapeStrings).toString(sink);
+                }
+            }
+        }
+        return NullableWrapper(value, escapeStrings);
+    }
+    else static if (__traits(compiles, customToString(value, (void delegate(const(char)[])).init)))
     {
         static struct CustomToStringWrapper
         {
