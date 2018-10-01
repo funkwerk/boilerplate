@@ -374,9 +374,17 @@ string GenerateWriter(T, Attributes...)(string name, string fieldCode, bool isSt
         accessor_body = format!`synchronized (this) { %s} `(accessor_body);
     }
 
-    return format("%s%s final @property void %s(typeof(%s) %s)%s%s { %s}",
+    string result = format("%s%s final @property void %s(typeof(%s) %s)%s%s { %s}",
         visibility, modifiers, accessorName, fieldCode, inputName,
         attributesString, precondition, accessor_body);
+
+    static if (is(T : Nullable!Arg, Arg))
+    {
+        result ~= format("%s%s final @property void %s(typeof(%s.get) %s)%s%s { %s}",
+        visibility, modifiers, accessorName, fieldCode, inputName,
+        attributesString, precondition, accessor_body);
+    }
+    return result;
 }
 
 @("generates writers as expected")
@@ -391,6 +399,27 @@ string GenerateWriter(T, Attributes...)(string name, string fieldCode, bool isSt
     static assert(GenerateWriter!(int[])("foo", "intArrayValue", true, false, false) ==
         "public static final @property void foo(typeof(intArrayValue) foo) " ~
         "nothrow @safe { this.foo = foo.dup; }");
+}
+
+@("generates same-type writer for Nullable")
+pure @safe unittest
+{
+    import std.typecons : Nullable, nullable;
+    import unit_threaded.should : shouldEqual;
+
+    struct Struct
+    {
+        @Write
+        Nullable!int optional_;
+
+        mixin(GenerateFieldAccessors);
+    }
+
+    Struct value;
+
+    value.optional = 5;
+
+    value.optional_.shouldEqual(5.nullable);
 }
 
 private enum uint defaultFunctionAttributes =
