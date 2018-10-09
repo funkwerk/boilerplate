@@ -1,5 +1,8 @@
 module boilerplate.autostring;
 
+import std.meta : Alias;
+import std.traits : Unqual;
+
 version(unittest)
 {
     import std.conv : to;
@@ -571,6 +574,30 @@ unittest
     value.to!string.shouldEqual(expected);
 }
 
+@("labels nested types with fully qualified names")
+unittest
+{
+    import std.datetime : SysTime;
+    import std.typecons : Nullable;
+
+    struct Struct
+    {
+        struct Struct2
+        {
+            mixin(GenerateToString);
+        }
+
+        Struct2 struct2;
+
+        mixin(GenerateToString);
+    }
+
+    const expected = `Struct(struct2=Struct.Struct2())`;
+    const value = Struct(Struct.Struct2());
+
+    value.to!string.shouldEqual(expected);
+}
+
 mixin template GenerateToStringTemplate()
 {
 
@@ -583,7 +610,7 @@ mixin template GenerateToStringTemplate()
             return null;
         }
 
-        import boilerplate.autostring : ToString;
+        import boilerplate.autostring : ToString, typeName;
         import boilerplate.util : GenNormalMemberTuple;
         import std.string : format;
 
@@ -606,7 +633,7 @@ mixin template GenerateToStringTemplate()
         if (udaIncludeSuper && udaExcludeSuper)
         {
             return format!`static assert(false, "Contradictory tags on '%s': IncludeSuper and ExcludeSuper");`
-                (typeof(this).stringof);
+                (typeName!(typeof(this)));
         }
 
         mixin GenNormalMemberTuple!true;
@@ -633,7 +660,7 @@ mixin template GenerateToStringTemplate()
 
         import std.string : endsWith, format, split, startsWith, strip;
         import std.traits : BaseClassesTuple, Unqual, getUDAs;
-        import boilerplate.autostring : ToString, isMemberUnlabeledByDefault;
+        import boilerplate.autostring : isMemberUnlabeledByDefault, ToString, typeName;
         import boilerplate.conditions : NonEmpty;
         import boilerplate.util : GenNormalMemberTuple, udaIndex;
 
@@ -717,7 +744,7 @@ mixin template GenerateToStringTemplate()
                     }
                 }
 
-                string NamePlusOpenParen = Unqual!(typeof(this)).stringof ~ "(";
+                string NamePlusOpenParen = typeName!(typeof(this)) ~ "(";
 
                 version(AutoStringDebug)
                 {
@@ -1055,7 +1082,7 @@ public bool isMemberUnlabeledByDefault(Type)(string field, bool attribNonEmpty)
     }
 
     return field.toLower == Type.stringof.toLower
-        || field.toLower == "time" && Type.stringof == "SysTime"
+        || field.toLower == "time" && is(Type == SysTime)
         || field.toLower == "id" && is(typeof(Type.toString));
 }
 
@@ -1155,6 +1182,33 @@ template hasOwnFunction(Aggregate, Super, string Name, Type)
     else
     {
         enum hasOwnFunction = false;
+    }
+}
+
+/**
+ * Find qualified name of `T` including any containing types; not including containing functions or modules.
+ */
+public template typeName(T)
+{
+    static if (__traits(compiles, __traits(parent, T)))
+    {
+        alias parent = Alias!(__traits(parent, T));
+        enum isSame = __traits(isSame, T, parent);
+
+        static if (!isSame && (
+            is(parent == struct) || is(parent == union) || is(parent == enum) ||
+            is(parent == class) || is(parent == interface)))
+        {
+            enum typeName = typeName!parent ~ "." ~ Unqual!T.stringof;
+        }
+        else
+        {
+            enum typeName = Unqual!T.stringof;
+        }
+    }
+    else
+    {
+        enum typeName = Unqual!T.stringof;
     }
 }
 
