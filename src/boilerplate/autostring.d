@@ -511,19 +511,27 @@ unittest
         mixin(GenerateToString);
     }
 
-    enum key1 = "opstop", key2 = "foo"; // collide
+    bool foundCollision = false;
 
-    const first = Struct([key1: null, key2: null]);
-    string[string] backwardsHashmap;
+    foreach (key1; ["opstop", "opsto"])
+    {
+        enum key2 = "foo"; // collide
 
-    backwardsHashmap[key2] = null;
-    backwardsHashmap[key1] = null;
+        const first = Struct([key1: null, key2: null]);
+        string[string] backwardsHashmap;
 
-    const second = Struct(backwardsHashmap);
+        backwardsHashmap[key2] = null;
+        backwardsHashmap[key1] = null;
 
-    assert(first.map.keys != second.map.keys);
+        const second = Struct(backwardsHashmap);
 
-    first.to!string.shouldEqual(second.to!string);
+        if (first.map.keys != second.map.keys)
+        {
+            foundCollision = true;
+            first.to!string.shouldEqual(second.to!string);
+        }
+    }
+    assert(foundCollision, "none of the listed keys caused a hash collision");
 }
 
 @("applies custom formatters to types in hashmaps")
