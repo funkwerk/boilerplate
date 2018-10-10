@@ -1060,8 +1060,9 @@ enum ToString
 
 public bool isMemberUnlabeledByDefault(Type)(string field, bool attribNonEmpty)
 {
-    import std.string : toLower;
+    import std.datetime : SysTime;
     import std.range.primitives : ElementType, isInputRange;
+    import std.string : toLower;
     import std.typecons : BitFlags;
 
     static if (isInputRange!Type)
