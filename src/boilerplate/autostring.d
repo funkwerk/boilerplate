@@ -592,7 +592,7 @@ unittest
         mixin(GenerateToString);
     }
 
-    const expected = `Struct(struct2=Struct.Struct2())`;
+    const expected = `Struct(Struct.Struct2())`;
     const value = Struct(Struct.Struct2());
 
     value.to!string.shouldEqual(expected);
