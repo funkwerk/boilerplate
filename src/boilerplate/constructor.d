@@ -821,6 +821,27 @@ unittest
     }
 }
 
+///
+@("builder supports struct that already contains a value field")
+unittest
+{
+    import std.typecons : Nullable, nullable;
+
+    struct Struct
+    {
+        private int value_;
+
+        mixin(GenerateThis);
+    }
+
+    with (Struct.Builder())
+    {
+        value = 5;
+
+        builderValue.shouldEqual(Struct(5));
+    }
+}
+
 import std.string : format;
 
 enum GetSuperTypeAsString_(string member) = format!`typeof(super).ConstructorInfo.FieldInfo.%s.Type`(member);
