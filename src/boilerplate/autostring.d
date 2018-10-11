@@ -598,6 +598,30 @@ unittest
     value.to!string.shouldEqual(expected);
 }
 
+@("supports fully qualified names with quotes")
+unittest
+{
+    import std.datetime : SysTime;
+    import std.typecons : Nullable;
+
+    struct Struct(string s)
+    {
+        struct Struct2
+        {
+            mixin(GenerateToString);
+        }
+
+        Struct2 struct2;
+
+        mixin(GenerateToString);
+    }
+
+    const expected = `Struct!"foo"(Struct!"foo".Struct2())`;
+    const value = Struct!"foo"(Struct!"foo".Struct2());
+
+    value.to!string.shouldEqual(expected);
+}
+
 mixin template GenerateToStringTemplate()
 {
 
@@ -632,8 +656,9 @@ mixin template GenerateToStringTemplate()
 
         if (udaIncludeSuper && udaExcludeSuper)
         {
-            return format!`static assert(false, "Contradictory tags on '%s': IncludeSuper and ExcludeSuper");`
-                (typeName!(typeof(this)));
+            return format!(`static assert(false, ` ~
+                `"Contradictory tags on '" ~ %(%s%) ~ "': IncludeSuper and ExcludeSuper");`)
+                ([typeName!(typeof(this))]);
         }
 
         mixin GenNormalMemberTuple!true;
@@ -765,7 +790,7 @@ mixin template GenerateToStringTemplate()
 
                 if (!nakedMode)
                 {
-                    result ~= `sink("` ~ NamePlusOpenParen ~ `");`;
+                    result ~= format!`sink(%(%s%));`([NamePlusOpenParen]);
                 }
 
                 bool includeSuper = false;
