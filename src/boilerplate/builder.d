@@ -171,7 +171,9 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
         }
     }
 
-    static if (!T.ConstructorInfo.fields.map!removeTrailingUnderline.canFind("value"))
+    static if (!std.algorithm.canFind(
+        std.algorithm.map!removeTrailingUnderline(T.ConstructorInfo.fields),
+        "value"))
     {
         public alias value = builderValue;
     }
