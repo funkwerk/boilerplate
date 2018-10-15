@@ -1087,29 +1087,54 @@ public bool isMemberUnlabeledByDefault(Type)(string field, bool attribNonEmpty)
 {
     import std.datetime : SysTime;
     import std.range.primitives : ElementType, isInputRange;
-    import std.string : toLower;
     import std.typecons : BitFlags;
+
+    field = field.toLower;
 
     static if (isInputRange!Type)
     {
         alias BaseType = ElementType!Type;
 
-        if (field.toLower == BaseType.stringof.toLower.pluralize && attribNonEmpty)
+        if (field == BaseType.stringof.toLower.pluralize && attribNonEmpty)
         {
             return true;
         }
     }
     else static if (is(Type: const BitFlags!BaseType, BaseType))
     {
-        if (field.toLower == BaseType.stringof.toLower.pluralize)
+        if (field == BaseType.stringof.toLower.pluralize)
         {
             return true;
         }
     }
 
-    return field.toLower == Type.stringof.toLower
-        || field.toLower == "time" && is(Type == SysTime)
-        || field.toLower == "id" && is(typeof(Type.toString));
+    return field == Type.stringof.toLower
+        || field == "time" && is(Type == SysTime)
+        || field == "id" && is(typeof(Type.toString));
+}
+
+private string toLower(string text)
+{
+    import std.string : stdToLower = toLower;
+
+    string result = null;
+
+    foreach (ub; cast(immutable(ubyte)[]) text)
+    {
+        if (ub >= 0x80) // utf-8, non-ascii
+        {
+            return text.stdToLower;
+        }
+        if (ub >= 'A' && ub <= 'Z')
+        {
+            result ~= cast(char) (ub + ('a' - 'A'));
+        }
+        else
+        {
+            result ~= cast(char) ub;
+        }
+    }
+    return result;
 }
 
 // http://code.activestate.com/recipes/82102/
