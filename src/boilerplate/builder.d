@@ -171,6 +171,11 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
         }
     }
 
+    static foreach (aliasMember; __traits(getAliasThis, T))
+    {
+        mixin(`alias ` ~ aliasMember ~ ` this;`);
+    }
+
     static if (!std.algorithm.canFind(
         std.algorithm.map!removeTrailingUnderline(T.ConstructorInfo.fields),
         "value"))
