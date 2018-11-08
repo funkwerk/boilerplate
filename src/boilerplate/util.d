@@ -374,7 +374,21 @@ private auto wrapFormatType(T)(T value, bool escapeStrings)
     }
     else static if (is(T : V[K], K, V))
     {
-        return orderedAssociativeArray(value);
+        static if (__traits(compiles, K.init < K.init))
+        {
+            return orderedAssociativeArray(value);
+        }
+        else
+        {
+            import std.traits : fullyQualifiedName;
+
+            // ansi escape codes. 0: reset, 1: bold, 93: bright yellow
+            pragma(msg, "\x1b[1;93mWarning\x1b[0m: Consistent ordering of type \x1b[1m" ~ T.stringof ~ "\x1b[0m " ~
+                "on output cannot be guaranteed.");
+            pragma(msg, "         Please implement opCmp for \x1b[1m" ~ fullyQualifiedName!K ~ "\x1b[0m.");
+
+            return value;
+        }
     }
     else static if (isSomeString!T)
     {

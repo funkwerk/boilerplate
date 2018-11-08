@@ -574,6 +574,30 @@ unittest
     value.to!string.shouldEqual(expected);
 }
 
+@("can format associative array of type that cannot be sorted")
+unittest
+{
+    import std.datetime : SysTime;
+    import std.typecons : Nullable;
+
+    struct Struct
+    {
+        mixin(GenerateToString);
+    }
+
+    struct Struct2
+    {
+        bool[Struct] hashmap;
+
+        mixin(GenerateToString);
+    }
+
+    const expected = `Struct2(hashmap=[])`;
+    const value = Struct2(null);
+
+    value.to!string.shouldEqual(expected);
+}
+
 @("labels nested types with fully qualified names")
 unittest
 {
