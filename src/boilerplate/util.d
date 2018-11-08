@@ -374,7 +374,7 @@ private auto wrapFormatType(T)(T value, bool escapeStrings)
     }
     else static if (is(T : V[K], K, V))
     {
-        static if (__traits(compiles, K.init < K.init))
+        static if (isOrderingComparable!K)
         {
             return orderedAssociativeArray(value);
         }
