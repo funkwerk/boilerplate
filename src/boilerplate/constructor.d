@@ -1,7 +1,7 @@
 module boilerplate.constructor;
 
 import std.algorithm : canFind, map;
-import std.meta : ApplyLeft, allSatisfy;
+import std.meta : AliasSeq, allSatisfy, ApplyLeft;
 import std.range : array;
 import std.traits : hasElaborateDestructor, isInstanceOf, isNested;
 import std.typecons : Tuple;
@@ -884,7 +884,7 @@ mixin template GenerateThisTemplate()
             reorder, udaIndex, removeTrailingUnderline;
         import std.algorithm : all, canFind, filter, map;
         import std.meta : Alias, aliasSeqOf, staticMap;
-        import std.range : array, drop, iota, zip;
+        import std.range : array, drop, empty, iota, zip;
         import std.string : endsWith, format, join;
         import std.typecons : Nullable;
 
@@ -1102,7 +1102,25 @@ mixin template GenerateThisTemplate()
             .array
         );
 
-        if (!(is(typeof(this) == struct) && fieldUseDefault.all)) // don't emit this() for structs
+        // don't emit this(a = b, c = d) for structs -
+        // the compiler complains that it collides with this(), which is reserved.
+        if (is(typeof(this) == struct) && fieldUseDefault.all)
+        {
+            // If there are fields, their direct-construction types may diverge from ours
+            // specifically, see the "struct with only default fields" test below
+            if (!fields.empty)
+            {
+                result ~= `static assert(
+                    is(typeof(this.tupleof) == ConstructorInfo.Types),
+                    "Structs with fields, that are all default, cannot use GenerateThis when their " ~
+                    "constructor types would diverge from their native types: " ~
+                    typeof(this).stringof ~ ".this" ~ typeof(this.tupleof).stringof ~ ", " ~
+                    "but generated constructor would have been " ~ typeof(this).stringof ~ ".this"
+                    ~ ConstructorInfo.Types.stringof
+                );`;
+            }
+        }
+        else
         {
             result ~= visibility ~ ` this(`
                 ~ constructorFieldOrder
@@ -1195,6 +1213,10 @@ if (fields_.length == Fields.length
     }
 
     public alias FieldInfo = FieldInfo_!();
+
+    mixin(
+        format!q{public alias Types = AliasSeq!(%-(%s, %)); }
+        (fields.map!(field => format!"FieldInfo.%s.Type"(field)).array));
 }
 
 enum ThisEnum
@@ -1269,4 +1291,36 @@ public template getUDADefaultOrNothing(T, attributes...)
             return attributes[udaIndex!(This.Default, attributes)].value;
         }
     }
+}
+
+@("struct with only default fields cannot use GenerateThis unless the default this() type matches the generated one")
+unittest
+{
+    static assert(!__traits(compiles, {
+        struct Foo
+        {
+            @(This.Default)
+            int[] array;
+
+            mixin(GenerateThis);
+        }
+
+        // because you would be able to do
+        // const array = [2];
+        // auto foo = Foo(array);
+        // which would be an error, but work with a generated constructor
+        // however, no constructor could be generated, as it would collide with this()
+    }));
+
+    // This works though.
+    struct Bar
+    {
+        @(This.Default)
+        const int[] array;
+
+        mixin(GenerateThis);
+    }
+
+    const array = [2];
+    auto bar = Bar(array);
 }
