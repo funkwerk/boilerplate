@@ -203,7 +203,7 @@ public struct BuilderProxy(T)
 
     private Mode mode = Mode.unset;
 
-    private Data data;
+    private Data data = Data.init;
 
     public this(T value)
     {

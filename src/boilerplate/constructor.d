@@ -842,6 +842,36 @@ unittest
     }
 }
 
+///
+@("builder supports struct that contains struct that has @disable(this)")
+unittest
+{
+    import std.typecons : Nullable, nullable;
+
+    static struct Inner
+    {
+        private int i_;
+
+        @disable this();
+
+        mixin(GenerateThis);
+    }
+
+    static struct Struct
+    {
+        private Inner inner_;
+
+        mixin(GenerateThis);
+    }
+
+    with (Struct.Builder())
+    {
+        inner.i = 3;
+
+        value.shouldEqual(Struct(Inner(3)));
+    }
+}
+
 import std.string : format;
 
 enum GetSuperTypeAsString_(string member) = format!`typeof(super).ConstructorInfo.FieldInfo.%s.Type`(member);
