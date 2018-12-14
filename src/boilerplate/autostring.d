@@ -125,6 +125,7 @@ unittest
     }
 
     Struct.init.to!string.shouldEqual("Struct()");
+    Struct(3).to!string.shouldEqual("Struct()");
     Struct(5).to!string.shouldEqual("Struct(i=5)");
 }
 
@@ -993,10 +994,11 @@ mixin template GenerateToStringTemplate()
                             enum optionalIndex = udaIndex!(ToString.Optional, __traits(getAttributes, symbol));
                             alias optionalUda = Alias!(__traits(getAttributes, symbol)[optionalIndex]);
 
-                            static if (is(typeof(optionalUda) == struct) && is(optionalUda: ToString.Optional!condition, alias condition))
+                            static if (is(optionalUda == struct))
                             {
-                                conditionalWritestmt = format!q{if (__traits(getAttributes, %s)[%s](%s)) { %%s }}
-                                    (membervalue, optionalIndex, membervalue);
+                                conditionalWritestmt = format!q{
+                                    if (__traits(getAttributes, %s)[%s].condition(%s)) { %%s }
+                                } (membervalue, optionalIndex, membervalue);
                             }
                             else static if (__traits(compiles, typeof(symbol).init.isNull))
                             {
@@ -1114,11 +1116,7 @@ template checkAttributeConsistency(Attributes...)
                     default: break;
                 }
             }
-            else static if (is(typeof(uda) == struct) && is(uda: ToString.Optional!A, alias A))
-            {
-                optional = true;
-            }
-            else static if (__traits(isSame, uda, ToString.Optional))
+            else static if (is(uda == struct) || __traits(isSame, uda, ToString.Optional))
             {
                 optional = true;
             }
@@ -1174,8 +1172,9 @@ struct ToString
         mixin(format!q{enum %s = ToStringEnum.%s;}(name, name));
     }
 
-    static struct Optional(alias condition)
+    static struct Optional(alias condition_)
     {
+        alias condition = condition_;
     }
 }
 
