@@ -74,7 +74,14 @@ This means non-empty for arrays, non-null for objects, non-zero for ints.
 @("can optionally exclude member")
 unittest
 {
+    import std.typecons : Nullable, nullable;
+
     class Class
+    {
+        mixin(GenerateToString);
+    }
+
+    struct Test // some type that is not comparable to null or 0
     {
         mixin(GenerateToString);
     }
@@ -83,16 +90,22 @@ unittest
     {
         @(ToString.Optional)
         int a;
+
         @(ToString.Optional)
         string s;
+
         @(ToString.Optional)
         Class obj;
+
+        @(ToString.Optional)
+        Nullable!Test nullable;
+
         mixin(GenerateToString);
     }
 
     Struct.init.to!string.shouldEqual("Struct()");
-    Struct(2, "hi", new Class).to!string.shouldEqual(`Struct(a=2, s="hi", obj=Class())`);
-    Struct(0, "", null).to!string.shouldEqual("Struct()");
+    Struct(2, "hi", new Class, Test().nullable).to!string.shouldEqual(`Struct(a=2, s="hi", obj=Class(), nullable=Test())`);
+    Struct(0, "", null, Nullable!Test()).to!string.shouldEqual("Struct()");
 }
 
 /++
@@ -949,41 +962,38 @@ mixin template GenerateToStringTemplate()
                             }
                         }
 
-                        string writestmt;
-
-                        if (labeled)
-                        {
-                            writestmt = format!`sink.sinkWrite(comma, %s, "%s=%%s", %s);`
-                                (escapeStrings, memberName, membervalue);
-                        }
-                        else
-                        {
-                            writestmt = format!`sink.sinkWrite(comma, %s, "%%s", %s);`(escapeStrings, membervalue);
-                        }
+                        string readMemberValue = membervalue;
+                        string conditionalWritestmt; // formatted with sink.sinkWrite(... readMemberValue ... )
 
                         static if (udaOptional)
                         {
                             import std.array : empty;
 
-                            static if (__traits(compiles, typeof(symbol).init.empty))
+                            static if (__traits(compiles, typeof(symbol).init.isNull))
                             {
-                                result ~= format!`import std.array : empty; if (!%s.empty) { %s }`
-                                    (membervalue, writestmt);
+                                conditionalWritestmt = format!q{if (!%s.isNull) { %%s }}
+                                    (membervalue);
+                                readMemberValue = membervalue ~ ".get";
+                            }
+                            else static if (__traits(compiles, typeof(symbol).init.empty))
+                            {
+                                conditionalWritestmt = format!q{import std.array : empty; if (!%s.empty) { %%s }}
+                                    (membervalue);
                             }
                             else static if (__traits(compiles, typeof(symbol).init !is null))
                             {
-                                result ~= format!`if (%s !is null) { %s }`
-                                    (membervalue, writestmt);
+                                conditionalWritestmt = format!q{if (%s !is null) { %%s }}
+                                    (membervalue);
                             }
                             else static if (__traits(compiles, typeof(symbol).init != 0))
                             {
-                                result ~= format!`if (%s != 0) { %s }`
-                                    (membervalue, writestmt);
+                                conditionalWritestmt = format!q{if (%s != 0) { %%s }}
+                                    (membervalue);
                             }
                             else static if (__traits(compiles, { if (typeof(symbol).init) { } }))
                             {
-                                result ~= format!`if (%s) { %s }`
-                                    (membervalue, writestmt);
+                                conditionalWritestmt = format!q{if (%s) { %%s }}
+                                    (membervalue);
                             }
                             else
                             {
@@ -994,8 +1004,23 @@ mixin template GenerateToStringTemplate()
                         }
                         else
                         {
-                            result ~= writestmt;
+                            conditionalWritestmt = q{ %s };
                         }
+
+                        string writestmt;
+
+                        if (labeled)
+                        {
+                            writestmt = format!`sink.sinkWrite(comma, %s, "%s=%%s", %s);`
+                                (escapeStrings, memberName, readMemberValue);
+                        }
+                        else
+                        {
+                            writestmt = format!`sink.sinkWrite(comma, %s, "%%s", %s);`
+                                (escapeStrings, readMemberValue);
+                        }
+
+                        result ~= format(conditionalWritestmt, writestmt);
                     }
                 }
 
