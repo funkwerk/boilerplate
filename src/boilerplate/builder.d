@@ -271,10 +271,19 @@ public struct BuilderProxy(T)
         }
         else if (this.mode == Mode.value)
         {
-            auto value = this.data.value;
+            static if (__traits(compiles, value.BuilderFrom()))
+            {
+                auto value = this.data.value;
 
-            this.mode = Mode.builder;
-            this.data.builder = value.BuilderFrom();
+                this.mode = Mode.builder;
+                this.data.builder = value.BuilderFrom();
+            }
+            else
+            {
+                assert(
+                    false,
+                    "Builder: cannot set sub-field directly since field is already being initialized by value (and BuilderFrom is unavailable in " ~ typeof(this.data.value).stringof ~ ")");
+            }
         }
 
         return this.data.builder;

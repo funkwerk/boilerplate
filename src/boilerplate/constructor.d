@@ -760,6 +760,43 @@ unittest
 }
 
 ///
+@("builder doesn't try to use BuilderFrom for types where nonconst references would have to be taken")
+unittest
+{
+    import core.exception : AssertError;
+
+    struct Struct1
+    {
+        int a;
+
+        private Object[] b_;
+
+        mixin(GenerateThis);
+    }
+
+    struct Struct2
+    {
+        Struct1 struct1;
+
+        mixin(GenerateThis);
+    }
+
+    // this should at least compile, despite the BuilderFrom hack not working with Struct1
+    auto builder = Struct2.Builder();
+
+    builder.struct1 = Struct1(2, null);
+
+    void set()
+    {
+        builder.struct1.b = null;
+    }
+
+    set().shouldThrow!AssertError(
+        "Builder: cannot set sub-field directly since field is already " ~
+        "being initialized by value (and BuilderFrom is unavailable in Struct1)");
+}
+
+///
 @("builder refuses overriding field assignment with value assignment")
 unittest
 {
