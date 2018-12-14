@@ -1,5 +1,6 @@
 module boilerplate.autostring;
 
+import std.format : format;
 import std.meta : Alias;
 import std.traits : Unqual;
 
@@ -106,6 +107,25 @@ unittest
     Struct.init.to!string.shouldEqual("Struct()");
     Struct(2, "hi", new Class, Test().nullable).to!string.shouldEqual(`Struct(a=2, s="hi", obj=Class(), nullable=Test())`);
     Struct(0, "", null, Nullable!Test()).to!string.shouldEqual("Struct()");
+}
+
+/++
+The `@(ToString.Optional)` tag can be used with a condition parameter
+indicating when the type is to be _included._
++/
+@("can pass exclusion condition to Optional")
+unittest
+{
+    struct Struct
+    {
+        @(ToString.Optional!(a => a > 3))
+        int i;
+
+        mixin(GenerateToString);
+    }
+
+    Struct.init.to!string.shouldEqual("Struct()");
+    Struct(5).to!string.shouldEqual("Struct(i=5)");
 }
 
 /++
@@ -720,6 +740,7 @@ mixin template GenerateToStringTemplate()
             return null;
         }
 
+        import std.meta : Alias;
         import std.string : endsWith, format, split, startsWith, strip;
         import std.traits : BaseClassesTuple, Unqual, getUDAs;
         import boilerplate.autostring : isMemberUnlabeledByDefault, ToString, typeName;
@@ -794,7 +815,7 @@ mixin template GenerateToStringTemplate()
 
                 foreach (uda; __traits(getAttributes, typeof(this)))
                 {
-                    static if (is(typeof(uda) == ToString))
+                    static if (is(typeof(uda) == ToStringEnum))
                     {
                         switch (uda)
                         {
@@ -969,7 +990,15 @@ mixin template GenerateToStringTemplate()
                         {
                             import std.array : empty;
 
-                            static if (__traits(compiles, typeof(symbol).init.isNull))
+                            enum optionalIndex = udaIndex!(ToString.Optional, __traits(getAttributes, symbol));
+                            alias optionalUda = Alias!(__traits(getAttributes, symbol)[optionalIndex]);
+
+                            static if (is(typeof(optionalUda) == struct) && is(optionalUda: ToString.Optional!condition, alias condition))
+                            {
+                                conditionalWritestmt = format!q{if (__traits(getAttributes, %s)[%s](%s)) { %%s }}
+                                    (membervalue, optionalIndex, membervalue);
+                            }
+                            else static if (__traits(compiles, typeof(symbol).init.isNull))
                             {
                                 conditionalWritestmt = format!q{if (!%s.isNull) { %%s }}
                                     (membervalue);
@@ -1074,17 +1103,24 @@ template checkAttributeConsistency(Attributes...)
 
         foreach (uda; Attributes)
         {
-            static if (is(typeof(uda) == ToString))
+            static if (is(typeof(uda) == ToStringEnum))
             {
                 switch (uda)
                 {
                     case ToString.Include: include = true; break;
                     case ToString.Exclude: exclude = true; break;
-                    case ToString.Optional: optional = true; break;
                     case ToString.Labeled: labeled = true; break;
                     case ToString.Unlabeled: unlabeled = true; break;
                     default: break;
                 }
+            }
+            else static if (is(typeof(uda) == struct) && is(uda: ToString.Optional!A, alias A))
+            {
+                optional = true;
+            }
+            else static if (__traits(isSame, uda, ToString.Optional))
+            {
+                optional = true;
             }
         }
 
@@ -1117,7 +1153,7 @@ struct ToStringHandler(alias Handler_)
     alias Handler = Handler_;
 }
 
-enum ToString
+enum ToStringEnum
 {
     // these go on the class
     Naked,
@@ -1129,7 +1165,18 @@ enum ToString
     Labeled,
     Exclude,
     Include,
-    Optional,
+}
+
+struct ToString
+{
+    static foreach (name; __traits(allMembers, ToStringEnum))
+    {
+        mixin(format!q{enum %s = ToStringEnum.%s;}(name, name));
+    }
+
+    static struct Optional(alias condition)
+    {
+    }
 }
 
 public bool isMemberUnlabeledByDefault(Type)(string field, bool attribNonEmpty)
