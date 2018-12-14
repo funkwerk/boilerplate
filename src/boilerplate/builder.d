@@ -215,7 +215,7 @@ public struct BuilderProxy(T)
     {
         assert(
             this.mode != Mode.builder,
-            "Builder: cannot set sub-field by value since a subfield has already been set.");
+            "Builder: cannot set field by value since a subfield has already been set.");
     }
     do
     {
@@ -263,18 +263,18 @@ public struct BuilderProxy(T)
     alias _implicitBuilder this;
 
     public @property ref Builder!T _implicitBuilder()
-    in
-    {
-        assert(
-            this.mode != Mode.value,
-            "Builder: cannot set sub-field directly since field is already being initialized by value");
-    }
-    do
     {
         if (this.mode == Mode.unset)
         {
             this.mode = Mode.builder;
             this.data.builder = Builder!T.init;
+        }
+        else if (this.mode == Mode.value)
+        {
+            auto value = this.data.value;
+
+            this.mode = Mode.builder;
+            this.data.builder = value.BuilderFrom();
         }
 
         return this.data.builder;

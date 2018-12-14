@@ -733,6 +733,65 @@ unittest
 }
 
 ///
+@("builder supports overriding value assignment with field assignment later")
+unittest
+{
+    struct Struct1
+    {
+        int a;
+        int b;
+
+        mixin(GenerateThis);
+    }
+
+    struct Struct2
+    {
+        Struct1 struct1;
+
+        mixin(GenerateThis);
+    }
+
+    auto builder = Struct2.Builder();
+
+    builder.struct1 = Struct1(2, 3);
+    builder.struct1.b = 4;
+
+    builder.value.shouldEqual(Struct2(Struct1(2, 4)));
+}
+
+///
+@("builder refuses overriding field assignment with value assignment")
+unittest
+{
+    import core.exception : AssertError;
+
+    struct Struct1
+    {
+        int a;
+        int b;
+
+        mixin(GenerateThis);
+    }
+
+    struct Struct2
+    {
+        Struct1 struct1;
+
+        mixin(GenerateThis);
+    }
+
+    auto builder = Struct2.Builder();
+
+    builder.struct1.b = 4;
+
+    void set()
+    {
+        builder.struct1 = Struct1(2, 3);
+    }
+    set().shouldThrow!AssertError("Builder: cannot set field by value since a subfield has already been set.");
+}
+
+///
 @("builder supports const args")
 unittest
 {
