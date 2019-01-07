@@ -1002,12 +1002,12 @@ mixin template GenerateThisTemplate()
 
         import boilerplate.constructor :
             GetMemberTypeAsString_, GetSuperTypeAsString_,
-            MemberDefault_, SuperDefault_,
-            MemberUseDefault_, SuperUseDefault_,
-            MemberAttributes_, SuperAttributes_,
+            MemberAttributes_, MemberDefault_, MemberUseDefault_,
+            SuperAttributes_, SuperDefault_, SuperUseDefault_,
             This;
-        import boilerplate.util : GenNormalMemberTuple, bucketSort, needToDup,
-            reorder, udaIndex, removeTrailingUnderline;
+        import boilerplate.util :
+            bucketSort, GenNormalMemberTuple, needToDup,
+            removeTrailingUnderline, reorder, udaIndex;
         import std.algorithm : all, canFind, filter, map;
         import std.meta : Alias, aliasSeqOf, staticMap;
         import std.range : array, drop, empty, iota, zip;

@@ -158,7 +158,7 @@ template udaIndex(alias attr, attributes...)
         {
             foreach (i, attrib; attributes)
             {
-                enum lastAttrib = i == attributes.length - 1;
+                enum lastAttrib = i + 1 == attributes.length;
 
                 static if (__traits(isTemplate, attr))
                 {
@@ -503,7 +503,7 @@ public template formatNamed(string text)
 unittest
 {
     import std.typecons : tuple;
-    import unit_threaded.should;
+    import unit_threaded.should : shouldEqual;
 
     formatNamed!("Hello %(second) World %(first)%(second)!")
         .values(tuple!("first", "second")("3", "5"))
@@ -530,7 +530,7 @@ body
 @("reorder returns reordered array")
 unittest
 {
-    import unit_threaded.should;
+    import unit_threaded.should : shouldEqual;
 
     [1, 2, 3].reorder([0, 2, 1]).shouldEqual([1, 3, 2]);
 }
@@ -569,7 +569,7 @@ public struct Optional(T)
 
     public void opAssign(T value)
     {
-        import std.algorithm : moveEmplace, move;
+        import std.algorithm : move, moveEmplace;
 
         auto valueCopy = UseMemcpyMove(DontCallDestructor(value));
 

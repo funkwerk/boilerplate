@@ -4,9 +4,9 @@ public import boilerplate.accessors;
 
 public import boilerplate.autostring;
 
-public import boilerplate.constructor;
-
 public import boilerplate.conditions;
+
+public import boilerplate.constructor;
 
 enum GenerateAll = GenerateThis ~ GenerateToString ~ GenerateFieldAccessors ~ GenerateInvariants;
 

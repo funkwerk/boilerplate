@@ -8,7 +8,7 @@ public alias Builder(T) = typeof(T.Builder());
 
 public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderProxy, alias _toInfo = _toInfo)
 {
-    import boilerplate.util : Optional, formatNamed, removeTrailingUnderline;
+    import boilerplate.util : formatNamed, Optional, removeTrailingUnderline;
     static import std.algorithm;
     static import std.format;
     static import std.range;
@@ -282,7 +282,8 @@ public struct BuilderProxy(T)
             {
                 assert(
                     false,
-                    "Builder: cannot set sub-field directly since field is already being initialized by value (and BuilderFrom is unavailable in " ~ typeof(this.data.value).stringof ~ ")");
+                    "Builder: cannot set sub-field directly since field is already being initialized by value " ~
+                    "(and BuilderFrom is unavailable in " ~ typeof(this.data.value).stringof ~ ")");
             }
         }
 

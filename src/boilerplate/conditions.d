@@ -271,7 +271,7 @@ mixin template GenerateInvariantsTemplate()
             return null;
         }
 
-        import boilerplate.conditions : IsConditionAttribute, generateChecksForAttributes;
+        import boilerplate.conditions : generateChecksForAttributes, IsConditionAttribute;
         import boilerplate.util : GenNormalMemberTuple, isStatic;
         import std.format : format;
         import std.meta : StdMetaFilter = Filter;

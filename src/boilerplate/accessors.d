@@ -1,6 +1,6 @@
 module boilerplate.accessors;
 
-import boilerplate.conditions : IsConditionAttribute, generateChecksForAttributes;
+import boilerplate.conditions : generateChecksForAttributes, IsConditionAttribute;
 import boilerplate.util: DeepConst, isStatic;
 import std.meta : StdMetaFilter = Filter;
 import std.traits;
@@ -46,9 +46,10 @@ public static string GenerateFieldDecls_(FieldType, Attributes...)
 
     string result;
 
-    import boilerplate.accessors : Read, ConstRead, RefRead, Write,
-        GenerateReader, GenerateConstReader, GenerateRefReader, GenerateWriter;
-
+    import boilerplate.accessors :
+        ConstRead,
+        GenerateConstReader, GenerateReader, GenerateRefReader, GenerateWriter,
+        Read, RefRead, Write;
     import boilerplate.util : udaIndex;
 
     static if (udaIndex!(Read, Attributes) != -1)
@@ -549,7 +550,7 @@ template getVisibility(A, attributes...)
                 {
                     return A.init.visibility;
                 }
-                else static if (i == attributes.length - 1)
+                else static if (i + 1 == attributes.length)
                 {
                     return A.init.visibility;
                 }
@@ -1016,7 +1017,7 @@ unittest
     class Test
     {
         @Read
-        static __gshared int stuff_ = 8;
+        __gshared int stuff_ = 8;
 
         mixin(GenerateFieldAccessors);
     }

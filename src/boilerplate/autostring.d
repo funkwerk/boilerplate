@@ -105,7 +105,8 @@ unittest
     }
 
     Struct.init.to!string.shouldEqual("Struct()");
-    Struct(2, "hi", new Class, Test().nullable).to!string.shouldEqual(`Struct(a=2, s="hi", obj=Class(), nullable=Test())`);
+    Struct(2, "hi", new Class, Test().nullable).to!string
+        .shouldEqual(`Struct(a=2, s="hi", obj=Class(), nullable=Test())`);
     Struct(0, "", null, Nullable!Test()).to!string.shouldEqual("Struct()");
 }
 
@@ -460,7 +461,7 @@ unittest
 {
     struct Struct
     {
-        import boilerplate.accessors : GenerateFieldAccessors, ConstRead;
+        import boilerplate.accessors : ConstRead, GenerateFieldAccessors;
 
         @ConstRead
         private int a_;
@@ -741,12 +742,12 @@ mixin template GenerateToStringTemplate()
             return null;
         }
 
-        import std.meta : Alias;
-        import std.string : endsWith, format, split, startsWith, strip;
-        import std.traits : BaseClassesTuple, Unqual, getUDAs;
         import boilerplate.autostring : isMemberUnlabeledByDefault, ToString, typeName;
         import boilerplate.conditions : NonEmpty;
         import boilerplate.util : GenNormalMemberTuple, udaIndex;
+        import std.meta : Alias;
+        import std.string : endsWith, format, split, startsWith, strip;
+        import std.traits : BaseClassesTuple, getUDAs, Unqual;
 
         // synchronized without lock contention is basically free, so always do it
         // TODO enable when https://issues.dlang.org/show_bug.cgi?id=18504 is fixed
@@ -920,8 +921,10 @@ mixin template GenerateToStringTemplate()
                     enum udaNonEmpty = udaIndex!(NonEmpty, __traits(getAttributes, symbol)) != -1;
 
                     // see std.traits.isFunction!()
-                    static if (is(symbol == function) || is(typeof(symbol) == function)
-                        || is(typeof(&symbol) U : U*) && is(U == function))
+                    static if (
+                        is(symbol == function)
+                        || is(typeof(symbol) == function)
+                        || (is(typeof(&symbol) U : U*) && is(U == function)))
                     {
                         enum isFunction = true;
                     }
@@ -1204,8 +1207,8 @@ public bool isMemberUnlabeledByDefault(Type)(string field, bool attribNonEmpty)
     }
 
     return field == Type.stringof.toLower
-        || field == "time" && is(Type == SysTime)
-        || field == "id" && is(typeof(Type.toString));
+        || (field == "time" && is(Type == SysTime))
+        || (field == "id" && is(typeof(Type.toString)));
 }
 
 private string toLower(string text)
