@@ -1119,7 +1119,7 @@ template checkAttributeConsistency(Attributes...)
                     default: break;
                 }
             }
-            else static if (is(uda == struct) || __traits(isSame, uda, ToString.Optional))
+            else static if (is(uda == struct) && __traits(isSame, uda, ToString.Optional))
             {
                 optional = true;
             }
