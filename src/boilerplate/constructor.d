@@ -15,7 +15,8 @@ version(unittest)
 GenerateThis is a mixin string that automatically generates a this() function, customizable with UDA.
 +/
 public enum string GenerateThis = `
-    import boilerplate.constructor: GenerateThisTemplate;
+    import boilerplate.constructor :
+        ConstructorField, GenerateThisTemplate, getUDADefaultOrNothing, saveConstructorInfo;
     import std.string : replace;
     mixin GenerateThisTemplate;
     mixin(typeof(this).generateThisImpl());
