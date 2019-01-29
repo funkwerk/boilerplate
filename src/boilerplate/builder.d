@@ -198,12 +198,28 @@ public struct BuilderProxy(T)
     private union Data
     {
         T value;
+
         Builder!T builder;
+
+        this(inout(T) value) inout pure
+        {
+            this.value = value;
+        }
+
+        this(inout(Builder!T) builder) inout pure
+        {
+            this.builder = builder;
+        }
+    }
+
+    struct DataWrapper
+    {
+        Data data;
     }
 
     private Mode mode = Mode.unset;
 
-    private Data data = Data.init;
+    private DataWrapper wrapper = DataWrapper.init;
 
     public this(T value)
     {
@@ -219,10 +235,18 @@ public struct BuilderProxy(T)
     }
     do
     {
-        Data newData = Data(value);
+        import std.algorithm : move, moveEmplace;
 
+        DataWrapper newWrapper = DataWrapper(Data(value));
+        if (this.mode == Mode.value)
+        {
+            move(newWrapper, this.wrapper);
+        }
+        else
+        {
+            moveEmplace(newWrapper, this.wrapper);
+        }
         this.mode = Mode.value;
-        this.data = newData;
     }
 
     public bool _isUnset() const
@@ -247,7 +271,7 @@ public struct BuilderProxy(T)
     }
     do
     {
-        return this.data.value;
+        return this.wrapper.data.value;
     }
 
     public ref auto _builder() inout
@@ -257,37 +281,42 @@ public struct BuilderProxy(T)
     }
     do
     {
-        return this.data.builder;
+        return this.wrapper.data.builder;
     }
 
     alias _implicitBuilder this;
 
     public @property ref Builder!T _implicitBuilder()
     {
+        import std.algorithm : move, moveEmplace;
+
         if (this.mode == Mode.unset)
         {
+            auto newWrapper = DataWrapper(Data(Builder!T.init));
+
             this.mode = Mode.builder;
-            this.data.builder = Builder!T.init;
+            moveEmplace(newWrapper, this.wrapper);
         }
         else if (this.mode == Mode.value)
         {
             static if (__traits(compiles, value.BuilderFrom()))
             {
-                auto value = this.data.value;
+                auto value = this.wrapper.data.value;
+                auto newWrapper = DataWrapper(Data(value.BuilderFrom()));
 
                 this.mode = Mode.builder;
-                this.data.builder = value.BuilderFrom();
+                move(newWrapper, this.wrapper);
             }
             else
             {
                 assert(
                     false,
                     "Builder: cannot set sub-field directly since field is already being initialized by value " ~
-                    "(and BuilderFrom is unavailable in " ~ typeof(this.data.value).stringof ~ ")");
+                    "(and BuilderFrom is unavailable in " ~ typeof(this.wrapper.data.value).stringof ~ ")");
             }
         }
 
-        return this.data.builder;
+        return this.wrapper.data.builder;
     }
 }
 
