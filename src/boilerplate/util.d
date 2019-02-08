@@ -567,7 +567,23 @@ public struct Optional(T)
         return this.value.u.t;
     }
 
-    public void opAssign(T value)
+    public void opAssign(U)(U value)
+    {
+        static if (is(U : Nullable!Arg, Arg))
+        {
+            // force-bypass the drug-fuelled `alias get this` idiocy by manually converting
+            // value to the strictly (const) correct type for the assign() call
+            T implConvertedValue = value;
+
+            _assign(implConvertedValue);
+        }
+        else
+        {
+            _assign(value);
+        }
+    }
+
+    private void _assign(T value)
     {
         import std.algorithm : move, moveEmplace;
 
@@ -597,7 +613,7 @@ public struct Optional(T)
 
     static if (is(T: Nullable!Arg, Arg))
     {
-        public void opAssign(Arg value)
+        private void _assign(Arg value)
         {
             this = T(value);
         }
@@ -630,6 +646,17 @@ unittest
     intArrayOptional ~= 6;
 
     assert(intArrayOptional._get == [5, 6]);
+}
+
+///
+@("optional correctly supports nullable assignment to const nullable of array")
+unittest
+{
+    import std.typecons : Nullable;
+
+    Optional!(const(Nullable!int)) nullableArrayOptional;
+
+    nullableArrayOptional = Nullable!int();
 }
 
 private template SafeUnqual(T)
