@@ -235,7 +235,7 @@ public struct BuilderProxy(T)
     }
     do
     {
-        import std.algorithm : move, moveEmplace;
+        import boilerplate.util : move, moveEmplace;
 
         DataWrapper newWrapper = DataWrapper(Data(value));
         if (this.mode == Mode.value)
@@ -288,7 +288,7 @@ public struct BuilderProxy(T)
 
     public @property ref Builder!T _implicitBuilder()
     {
-        import std.algorithm : move, moveEmplace;
+        import boilerplate.util : move, moveEmplace;
 
         if (this.mode == Mode.unset)
         {

@@ -1451,3 +1451,29 @@ unittest
     const array = [2];
     auto bar = Bar(array);
 }
+
+@("very large types can be used")
+unittest
+{
+    import std.format : format;
+    import std.range : iota;
+
+    struct VeryLargeType
+    {
+        static foreach (i; 500.iota)
+        {
+            mixin(format!"int v%s;"(i));
+        }
+
+        mixin(GenerateThis);
+    }
+
+    struct Wrapper
+    {
+        VeryLargeType field;
+
+        mixin(GenerateThis);
+    }
+
+    auto builder = Wrapper.Builder();
+}

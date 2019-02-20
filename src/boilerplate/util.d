@@ -677,3 +677,35 @@ public string removeTrailingUnderline(string name)
 
     return name.endsWith("_") ? name[0 .. $ - 1] : name;
 }
+
+/**
+ * manually reimplement `move`, `moveEmplace` because the phobos implementation of
+ * `moveEmplace` is **really, really bad!** it forces a recursive template
+ * instantiation over every primitive field in a struct, causing template overflows
+ * during compilation.
+ *
+ * See:
+ *      Phobos bug https://issues.dlang.org/show_bug.cgi?id=19689
+ *      Phobos fix https://github.com/dlang/phobos/pull/6873
+ */
+public void moveEmplace(T)(ref T source, ref T dest) @trusted
+in (&dest !is &source)
+{
+    import core.stdc.string : memcpy, memset;
+
+    memcpy(&dest, &source, T.sizeof);
+    memset(&source, 0, T.sizeof);
+}
+
+///
+public void move(T)(ref T source, ref T dest) @trusted
+in (&dest !is &source)
+{
+    import std.traits : hasElaborateDestructor;
+
+    static if (hasElaborateDestructor!T)
+    {
+        dest.__xdtor();
+    }
+    moveEmplace(source, dest);
+}
