@@ -185,6 +185,16 @@ string GenerateReader(T, Attributes...)(string name, bool fieldIsStatic, bool fi
         filterAttributes!T(fieldIsStatic, fieldIsUnsafe, FilterMode.Reader);
 
     string attributesString = generateAttributeString(attributes);
+    string type;
+
+    if (fieldIsStatic)
+    {
+        type = format!`typeof(this.%s)`(name);
+    }
+    else
+    {
+        type = format!`inout(typeof(this.%s))`(name);
+    }
 
     // for types like string where the contents are already const or value,
     // so we can safely reassign to a non-const type
@@ -196,6 +206,7 @@ string GenerateReader(T, Attributes...)(string name, bool fieldIsStatic, bool fi
     {
         // necessitated by DMD bug https://issues.dlang.org/show_bug.cgi?id=18545
         auto accessor_body = format!`typeof(cast() this.%s) var = this.%s; return var;`(name, name);
+        type = format!`typeof(cast() this.%s)`(name);
     }
     else
     {
@@ -225,8 +236,8 @@ string GenerateReader(T, Attributes...)(string name, bool fieldIsStatic, bool fi
         }
     }
 
-    return format!("%s%s final @property auto %s()%s%s { %s }")
-                (visibility, modifiers, accessorName, attributesString, outCondition, accessor_body);
+    return format!("%s%s final @property %s %s()%s%s { %s }")
+                (visibility, modifiers, type, accessorName, attributesString, outCondition, accessor_body);
 }
 
 @("generates readers as expected")
@@ -238,16 +249,16 @@ string GenerateReader(T, Attributes...)(string name, bool fieldIsStatic, bool fi
     const string constStringValue;
 
     static assert(GenerateReader!int("foo", true, false, false) ==
-        "public static final @property auto foo() " ~
+        "public static final @property typeof(this.foo) foo() " ~
         "@nogc nothrow @safe { return this.foo; }");
     static assert(GenerateReader!string("foo", true, false, false) ==
-        "public static final @property auto foo() " ~
+        "public static final @property typeof(this.foo) foo() " ~
         "@nogc nothrow @safe { return this.foo; }");
     static assert(GenerateReader!(int[])("foo", true, false, false) ==
-        "public static final @property auto foo() nothrow @safe "
+        "public static final @property typeof(this.foo) foo() nothrow @safe "
       ~ "{ return typeof(this.foo).init ~ this.foo; }");
     static assert(GenerateReader!(const string)("foo", true, false, false) ==
-        "public static final @property auto foo() @nogc nothrow @safe "
+        "public static final @property typeof(cast() this.foo) foo() @nogc nothrow @safe "
       ~ "{ typeof(cast() this.foo) var = this.foo; return var; }");
 }
 
@@ -272,22 +283,22 @@ string GenerateRefReader(T)(string name, bool isStatic)
     auto modifiers = getModifiers(isStatic);
 
     // no need to synchronize a reference read
-    return format("%s%s final @property ref auto %s() " ~
+    return format("%s%s final @property ref typeof(this.%s) %s() " ~
         "%s{ return this.%s; }",
-        visibility, modifiers, accessorName, attributesString, name);
+        visibility, modifiers, name, accessorName, attributesString, name);
 }
 
 @("generates ref readers as expected")
 @nogc nothrow pure @safe unittest
 {
     static assert(GenerateRefReader!int("foo", true) ==
-        "public static final @property ref auto foo() " ~
+        "public static final @property ref typeof(this.foo) foo() " ~
         "@nogc nothrow @safe { return this.foo; }");
     static assert(GenerateRefReader!string("foo", true) ==
-        "public static final @property ref auto foo() " ~
+        "public static final @property ref typeof(this.foo) foo() " ~
         "@nogc nothrow @safe { return this.foo; }");
     static assert(GenerateRefReader!(int[])("foo", true) ==
-        "public static final @property ref auto foo() " ~
+        "public static final @property ref typeof(this.foo) foo() " ~
         "@nogc nothrow @safe { return this.foo; }");
 }
 
@@ -323,12 +334,12 @@ string GenerateConstReader(T, Attributes...)(string name, bool isStatic, bool is
             outCondition = format!` out(result) { %s } body`(checks);
         }
 
-        return format("%s%s final @property const(typeof(%s)) %s()%s%s { %s}",
+        return format("%s%s final @property const(typeof(this.%s)) %s()%s%s { %s}",
             visibility, modifiers, name, accessorName, attributesString, outCondition, accessor_body);
     }
 
-    return format("%s%s final @property auto %s() const%s { %s}",
-        visibility, modifiers, accessorName, attributesString, accessor_body);
+    return format("%s%s final @property const(typeof(this.%s)) %s() const%s { %s}",
+        visibility, modifiers, name, accessorName, attributesString, accessor_body);
 }
 
 string GenerateWriter(T, Attributes...)(string name, string fieldCode, bool isStatic, bool isUnsafe, bool synchronize)
