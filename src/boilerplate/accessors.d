@@ -185,6 +185,7 @@ string GenerateReader(T, Attributes...)(string name, bool fieldIsStatic, bool fi
         filterAttributes!T(fieldIsStatic, fieldIsUnsafe, FilterMode.Reader);
 
     string attributesString = generateAttributeString(attributes);
+    string accessorBody;
     string type;
 
     if (fieldIsStatic)
@@ -200,22 +201,22 @@ string GenerateReader(T, Attributes...)(string name, bool fieldIsStatic, bool fi
     // so we can safely reassign to a non-const type
     static if (needToDupField)
     {
-        auto accessor_body = format!`return typeof(this.%s).init ~ this.%s;`(name, name);
+        accessorBody = format!`return typeof(this.%s).init ~ this.%s;`(name, name);
     }
     else static if (DeepConst!(Unqual!T) && !is(Unqual!T == T))
     {
         // necessitated by DMD bug https://issues.dlang.org/show_bug.cgi?id=18545
-        auto accessor_body = format!`typeof(cast() this.%s) var = this.%s; return var;`(name, name);
+        accessorBody = format!`typeof(cast() this.%s) var = this.%s; return var;`(name, name);
         type = format!`typeof(cast() this.%s)`(name);
     }
     else
     {
-        auto accessor_body = format!`return this.%s;`(name);
+        accessorBody = format!`return this.%s;`(name);
     }
 
     if (synchronize)
     {
-        accessor_body = format!`synchronized (this) { %s} `(accessor_body);
+        accessorBody = format!`synchronized (this) { %s} `(accessorBody);
     }
 
     auto modifiers = getModifiers(fieldIsStatic);
@@ -237,7 +238,7 @@ string GenerateReader(T, Attributes...)(string name, bool fieldIsStatic, bool fi
     }
 
     return format!("%s%s final @property %s %s()%s%s { %s }")
-                (visibility, modifiers, type, accessorName, attributesString, outCondition, accessor_body);
+                (visibility, modifiers, type, accessorName, attributesString, outCondition, accessorBody);
 }
 
 @("generates readers as expected")
@@ -315,11 +316,11 @@ string GenerateConstReader(T, Attributes...)(string name, bool isStatic, bool is
 
     string attributesString = generateAttributeString(attributes);
 
-    string accessor_body = format!`return this.%s; `(name);
+    string accessorBody = format!`return this.%s; `(name);
 
     if (synchronize)
     {
-        accessor_body = format!`synchronized (this) { %s} `(accessor_body);
+        accessorBody = format!`synchronized (this) { %s} `(accessorBody);
     }
 
     auto modifiers = getModifiers(isStatic);
@@ -335,11 +336,11 @@ string GenerateConstReader(T, Attributes...)(string name, bool isStatic, bool is
         }
 
         return format("%s%s final @property const(typeof(this.%s)) %s()%s%s { %s}",
-            visibility, modifiers, name, accessorName, attributesString, outCondition, accessor_body);
+            visibility, modifiers, name, accessorName, attributesString, outCondition, accessorBody);
     }
 
     return format("%s%s final @property const(typeof(this.%s)) %s() const%s { %s}",
-        visibility, modifiers, name, accessorName, attributesString, accessor_body);
+        visibility, modifiers, name, accessorName, attributesString, accessorBody);
 }
 
 string GenerateWriter(T, Attributes...)(string name, string fieldCode, bool isStatic, bool isUnsafe, bool synchronize)
@@ -379,22 +380,22 @@ string GenerateWriter(T, Attributes...)(string name, string fieldCode, bool isSt
     auto attributesString = generateAttributeString(attributes);
     auto modifiers = getModifiers(isStatic);
 
-    string accessor_body = format!`this.%s = %s%s; `(name, inputName, needToDupField ? ".dup" : "");
+    string accessorBody = format!`this.%s = %s%s; `(name, inputName, needToDupField ? ".dup" : "");
 
     if (synchronize)
     {
-        accessor_body = format!`synchronized (this) { %s} `(accessor_body);
+        accessorBody = format!`synchronized (this) { %s} `(accessorBody);
     }
 
     string result = format("%s%s final @property void %s(typeof(%s) %s)%s%s { %s}",
         visibility, modifiers, accessorName, fieldCode, inputName,
-        attributesString, precondition, accessor_body);
+        attributesString, precondition, accessorBody);
 
     static if (is(T : Nullable!Arg, Arg))
     {
         result ~= format("%s%s final @property void %s(typeof(%s.get) %s)%s%s { %s}",
         visibility, modifiers, accessorName, fieldCode, inputName,
-        attributesString, precondition, accessor_body);
+        attributesString, precondition, accessorBody);
     }
     return result;
 }
