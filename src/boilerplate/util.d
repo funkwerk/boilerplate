@@ -282,6 +282,10 @@ void sinkWrite(T...)(scope void delegate(const(char)[]) sink, ref bool comma, bo
         {
             sink.sinkWrite(comma, escapeStrings, fmt, arg.get);
         }
+        else
+        {
+            sink.sinkWrite(comma, false, fmt, "Nullable.null");
+        }
         return;
     }
     else

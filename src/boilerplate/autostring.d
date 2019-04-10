@@ -612,9 +612,6 @@ unittest
 @("can format associative array of type that cannot be sorted")
 unittest
 {
-    import std.datetime : SysTime;
-    import std.typecons : Nullable;
-
     struct Struct
     {
         mixin(GenerateToString);
@@ -660,9 +657,6 @@ unittest
 @("supports fully qualified names with quotes")
 unittest
 {
-    import std.datetime : SysTime;
-    import std.typecons : Nullable;
-
     struct Struct(string s)
     {
         struct Struct2
@@ -679,6 +673,20 @@ unittest
     const value = Struct!"foo"(Struct!"foo".Struct2());
 
     value.to!string.shouldEqual(expected);
+}
+
+@("non-optional null Nullables")
+unittest
+{
+    import std.typecons : Nullable;
+
+    struct Struct
+    {
+        Nullable!int i;
+
+        mixin(GenerateToString);
+    }
+    Struct().to!string.shouldEqual("Struct(i=Nullable.null)");
 }
 
 mixin template GenerateToStringTemplate()
