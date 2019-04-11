@@ -675,17 +675,35 @@ unittest
     value.to!string.shouldEqual(expected);
 }
 
-@("non-optional null Nullables")
+@("optional-always null Nullable")
 unittest
 {
     import std.typecons : Nullable;
 
     struct Struct
     {
+        @(ToString.Optional!(a => true))
         Nullable!int i;
 
         mixin(GenerateToString);
     }
+
+    Struct().to!string.shouldEqual("Struct(i=Nullable.null)");
+}
+
+@("force-included null Nullable")
+unittest
+{
+    import std.typecons : Nullable;
+
+    struct Struct
+    {
+        @(ToString.Include)
+        Nullable!int i;
+
+        mixin(GenerateToString);
+    }
+
     Struct().to!string.shouldEqual("Struct(i=Nullable.null)");
 }
 
@@ -1046,7 +1064,18 @@ mixin template GenerateToStringTemplate()
                         }
                         else
                         {
-                            conditionalWritestmt = q{ %s };
+                            // Nullables (without handler, that aren't force-included) fall back to optional
+                            static if (!udaToStringHandler && !udaInclude &&
+                                __traits(compiles, typeof(symbol).init.isNull))
+                            {
+                                conditionalWritestmt = format!q{if (!%s.isNull) { %%s }}
+                                    (membervalue);
+                                readMemberValue = membervalue ~ ".get";
+                            }
+                            else
+                            {
+                                conditionalWritestmt = q{ %s };
+                            }
                         }
 
                         string writestmt;
