@@ -894,6 +894,37 @@ unittest
 }
 
 ///
+@("builder with passthrough assignment to Nullable structs")
+unittest
+{
+    import std.typecons : Nullable, nullable;
+
+    struct Struct1
+    {
+        int a;
+
+        mixin(GenerateThis);
+    }
+
+    struct Struct2
+    {
+        @(This.Default)
+        Nullable!Struct1 b;
+
+        mixin(GenerateThis);
+    }
+
+    with (Struct2.Builder())
+    {
+        value.shouldEqual(Struct2(Nullable!Struct1()));
+
+        b.a = 5;
+
+        value.shouldEqual(Struct2(Nullable!Struct1(Struct1(5))));
+    }
+}
+
+///
 @("builder supports reconstruction from value")
 unittest
 {

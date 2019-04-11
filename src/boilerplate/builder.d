@@ -1,6 +1,6 @@
 module boilerplate.builder;
 
-import std.typecons : Tuple;
+import std.typecons : Nullable, Tuple;
 
 private alias Info = Tuple!(string, "typeField", string, "builderField");
 
@@ -23,19 +23,28 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
 
     private template BuilderFieldInfo(string member)
     {
-        mixin(std.format.format!q{alias BaseType = T.ConstructorInfo.FieldInfo.%s.Type;}(member));
+        mixin(std.format.format!q{alias FieldType = T.ConstructorInfo.FieldInfo.%s.Type;}(member));
+
+        static if (is(FieldType : Nullable!Arg, Arg))
+        {
+            alias BaseType = Arg;
+        }
+        else
+        {
+            alias BaseType = FieldType;
+        }
 
         // type has a builder ... that constructs it
         // protects from such IDIOTIC DESIGN ERRORS as `alias Nullable!T.get this`
         static if (__traits(hasMember, BaseType, "Builder")
             && is(typeof(BaseType.Builder().builderValue): BaseType))
         {
-            alias Type = BuilderProxy!BaseType;
+            alias Type = BuilderProxy!FieldType;
             enum isBuildable = true;
         }
         else
         {
-            alias Type = Optional!BaseType;
+            alias Type = Optional!FieldType;
             enum isBuildable = false;
         }
     }
@@ -116,7 +125,7 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
                 {
                     if (this.%(builderField)._isBuilder)
                     {
-                        return this.%(builderField)._builder.builderValue;
+                        return this.%(builderField)._builderValue;
                     }
                     else if (this.%(builderField)._isValue)
                     {
@@ -195,18 +204,29 @@ public struct BuilderProxy(T)
         value,
     }
 
+    static if (is(T : Nullable!Arg, Arg))
+    {
+        enum isNullable = true;
+        alias InnerType = Arg;
+    }
+    else
+    {
+        enum isNullable = false;
+        alias InnerType = T;
+    }
+
     private union Data
     {
-        T value;
+        InnerType value;
 
-        Builder!T builder;
+        Builder!InnerType builder;
 
-        this(inout(T) value) inout pure
+        this(inout(InnerType) value) inout pure
         {
             this.value = value;
         }
 
-        this(inout(Builder!T) builder) inout pure
+        this(inout(Builder!InnerType) builder) inout pure
         {
             this.builder = builder;
         }
@@ -271,7 +291,14 @@ public struct BuilderProxy(T)
     }
     do
     {
-        return this.wrapper.data.value;
+        static if (isNullable)
+        {
+            return inout(T)(this.wrapper.data.value);
+        }
+        else
+        {
+            return this.wrapper.data.value;
+        }
     }
 
     public ref auto _builder() inout
@@ -284,15 +311,32 @@ public struct BuilderProxy(T)
         return this.wrapper.data.builder;
     }
 
+    public auto _builderValue()
+    in
+    {
+        assert(this.mode == Mode.builder);
+    }
+    do
+    {
+        static if (isNullable)
+        {
+            return T(this.wrapper.data.builder.builderValue);
+        }
+        else
+        {
+            return this.wrapper.data.builder.builderValue;
+        }
+    }
+
     alias _implicitBuilder this;
 
-    public @property ref Builder!T _implicitBuilder()
+    public @property ref Builder!InnerType _implicitBuilder()
     {
         import boilerplate.util : move, moveEmplace;
 
         if (this.mode == Mode.unset)
         {
-            auto newWrapper = DataWrapper(Data(Builder!T.init));
+            auto newWrapper = DataWrapper(Data(Builder!InnerType.init));
 
             this.mode = Mode.builder;
             moveEmplace(newWrapper, this.wrapper);
