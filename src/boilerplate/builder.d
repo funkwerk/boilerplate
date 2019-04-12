@@ -269,6 +269,14 @@ public struct BuilderProxy(T)
         this.mode = Mode.value;
     }
 
+    static if (isNullable)
+    {
+        public void opAssign(InnerType value)
+        {
+            return opAssign(T(value));
+        }
+    }
+
     public bool _isUnset() const
     {
         return this.mode == Mode.unset;

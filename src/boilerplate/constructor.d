@@ -925,6 +925,35 @@ unittest
 }
 
 ///
+@("builder with direct value assignment to Nullable struct")
+unittest
+{
+    import std.typecons : Nullable, nullable;
+
+    struct Struct1
+    {
+        mixin(GenerateThis);
+    }
+
+    struct Struct2
+    {
+        @(This.Default)
+        Nullable!Struct1 value;
+
+        mixin(GenerateThis);
+    }
+
+    with (Struct2.Builder())
+    {
+        builderValue.shouldEqual(Struct2());
+
+        value = Struct1();
+
+        builderValue.shouldEqual(Struct2(Struct1().nullable));
+    }
+}
+
+///
 @("builder supports reconstruction from value")
 unittest
 {
