@@ -257,7 +257,21 @@ public struct BuilderProxy(T)
     {
         import boilerplate.util : move, moveEmplace;
 
-        DataWrapper newWrapper = DataWrapper(Data(value));
+        static if (isNullable)
+        {
+            if (value.isNull)
+            {
+                this.mode = Mode.unset;
+                return;
+            }
+
+            DataWrapper newWrapper = DataWrapper(Data(value.get));
+        }
+        else
+        {
+            DataWrapper newWrapper = DataWrapper(Data(value));
+        }
+
         if (this.mode == Mode.value)
         {
             move(newWrapper, this.wrapper);

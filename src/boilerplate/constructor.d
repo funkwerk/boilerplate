@@ -925,7 +925,7 @@ unittest
 }
 
 ///
-@("builder with direct value assignment to Nullable struct")
+@("builder with value assignment to Nullable struct field")
 unittest
 {
     import std.typecons : Nullable, nullable;
@@ -950,6 +950,13 @@ unittest
         value = Struct1();
 
         builderValue.shouldEqual(Struct2(Struct1().nullable));
+    }
+
+    with (Struct2.Builder())
+    {
+        value = Nullable!Struct1();
+
+        builderValue.shouldEqual(Struct2());
     }
 }
 
