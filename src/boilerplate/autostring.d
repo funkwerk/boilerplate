@@ -707,6 +707,27 @@ unittest
     Struct().to!string.shouldEqual("Struct(i=Nullable.null)");
 }
 
+// test for clean detection of Nullable
+@("struct with isNull")
+unittest
+{
+    struct Inner
+    {
+        bool isNull() const { return false; }
+
+        mixin(GenerateToString);
+    }
+
+    struct Outer
+    {
+        Inner inner;
+
+        mixin(GenerateToString);
+    }
+
+    Outer().to!string.shouldEqual("Outer(Inner())");
+}
+
 mixin template GenerateToStringTemplate()
 {
 
@@ -1033,7 +1054,11 @@ mixin template GenerateToStringTemplate()
                             {
                                 conditionalWritestmt = format!q{if (!%s.isNull) { %%s }}
                                     (membervalue);
-                                readMemberValue = membervalue ~ ".get";
+
+                                static if (is(typeof(symbol) : Nullable!T, T))
+                                {
+                                    readMemberValue = membervalue ~ ".get";
+                                }
                             }
                             else static if (__traits(compiles, typeof(symbol).init.empty))
                             {
@@ -1070,7 +1095,11 @@ mixin template GenerateToStringTemplate()
                             {
                                 conditionalWritestmt = format!q{if (!%s.isNull) { %%s }}
                                     (membervalue);
-                                readMemberValue = membervalue ~ ".get";
+
+                                static if (is(typeof(symbol) : Nullable!T, T))
+                                {
+                                    readMemberValue = membervalue ~ ".get";
+                                }
                             }
                             else
                             {
