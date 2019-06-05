@@ -795,6 +795,7 @@ mixin template GenerateToStringTemplate()
         import std.meta : Alias;
         import std.string : endsWith, format, split, startsWith, strip;
         import std.traits : BaseClassesTuple, getUDAs, Unqual;
+        import std.typecons : Nullable;
 
         // synchronized without lock contention is basically free, so always do it
         // TODO enable when https://issues.dlang.org/show_bug.cgi?id=18504 is fixed
