@@ -55,3 +55,21 @@ unittest
     Struct().constObject.shouldThrow!AssertError;
     Struct().object.shouldThrow!AssertError;
 }
+
+@("field with reserved name")
+unittest
+{
+    struct Struct
+    {
+        int version_;
+
+        mixin(GenerateAll);
+    }
+
+    with (Struct.Builder())
+    {
+        version_ = 5;
+
+        assert(value.version_ == 5);
+    }
+}

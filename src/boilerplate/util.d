@@ -1,5 +1,6 @@
 module boilerplate.util;
 
+import std.format;
 import std.meta;
 import std.range : iota;
 import std.traits;
@@ -681,6 +682,15 @@ public string removeTrailingUnderline(string name)
 
     return name.endsWith("_") ? name[0 .. $ - 1] : name;
 }
+
+// Remove trailing underline iff the result would not be a reserved identifier
+public enum optionallyRemoveTrailingUnderline(string name) =
+    isReservedIdentifier!(name.removeTrailingUnderline) ? name : name.removeTrailingUnderline;
+
+private enum isReservedIdentifier(string identifier) = !__traits(compiles, mixin(format!q{({ int %s; })}(identifier)));
+
+static assert( isReservedIdentifier!"version");
+static assert(!isReservedIdentifier!"bla");
 
 /**
  * manually reimplement `move`, `moveEmplace` because the phobos implementation of

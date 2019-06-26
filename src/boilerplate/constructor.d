@@ -1075,6 +1075,7 @@ mixin template GenerateThisTemplate()
             This;
         import boilerplate.util :
             bucketSort, GenNormalMemberTuple, needToDup,
+            optionallyRemoveTrailingUnderline,
             removeTrailingUnderline, reorder, udaIndex;
         import std.algorithm : all, canFind, filter, map;
         import std.meta : Alias, aliasSeqOf, staticMap;
@@ -1239,7 +1240,7 @@ mixin template GenerateThisTemplate()
 
             if (!includeMember) continue;
 
-            enum paramName = member.removeTrailingUnderline;
+            enum paramName = optionallyRemoveTrailingUnderline!member;
 
             string argexpr = paramName;
 

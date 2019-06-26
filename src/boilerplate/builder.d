@@ -8,9 +8,10 @@ public alias Builder(T) = typeof(T.Builder());
 
 public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderProxy, alias _toInfo = _toInfo)
 {
-    import boilerplate.util : formatNamed, Optional, removeTrailingUnderline;
+    import boilerplate.util : formatNamed, Optional, optionallyRemoveTrailingUnderline, removeTrailingUnderline;
     static import std.algorithm;
     static import std.format;
+    static import std.meta;
     static import std.range;
     static import std.typecons;
 
@@ -19,7 +20,8 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
     private enum fieldInfoList = std.range.array(
         std.algorithm.map!_toInfo(
             std.range.zip(T.ConstructorInfo.fields,
-                std.algorithm.map!removeTrailingUnderline(T.ConstructorInfo.fields))));
+                [std.meta.staticMap!(
+                    optionallyRemoveTrailingUnderline, std.meta.aliasSeqOf!(T.ConstructorInfo.fields))])));
 
     private template BuilderFieldInfo(string member)
     {
