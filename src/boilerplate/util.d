@@ -689,7 +689,7 @@ public enum optionallyRemoveTrailingUnderline(string name) =
 
 private enum isReservedIdentifier(string identifier) = !__traits(compiles, mixin(format!q{({ int %s; })}(identifier)));
 
-static assert( isReservedIdentifier!"version");
+static assert(isReservedIdentifier!"version");
 static assert(!isReservedIdentifier!"bla");
 
 /**

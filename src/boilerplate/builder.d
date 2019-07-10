@@ -27,6 +27,8 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
     {
         mixin(std.format.format!q{alias FieldType = T.ConstructorInfo.FieldInfo.%s.Type;}(member));
 
+        import std.typecons : Nullable;
+
         static if (is(FieldType : Nullable!Arg, Arg))
         {
             alias BaseType = Arg;
