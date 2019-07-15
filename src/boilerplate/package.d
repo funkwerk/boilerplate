@@ -73,3 +73,14 @@ unittest
         assert(value.version_ == 5);
     }
 }
+
+@("class with no members")
+unittest
+{
+    static class Class
+    {
+        mixin(GenerateAll);
+    }
+
+    auto instance = Class.Builder().value;
+}

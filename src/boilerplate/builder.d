@@ -17,11 +17,19 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
 
     static assert(__traits(hasMember, T, "ConstructorInfo"));
 
+    static if (T.ConstructorInfo.fields.length > 0)
+    {
+        private enum string[] builderFields = [
+            std.meta.staticMap!(optionallyRemoveTrailingUnderline,
+                std.meta.aliasSeqOf!(T.ConstructorInfo.fields))];
+    }
+    else
+    {
+        private enum string[] builderFields = [];
+    }
     private enum fieldInfoList = std.range.array(
         std.algorithm.map!_toInfo(
-            std.range.zip(T.ConstructorInfo.fields,
-                [std.meta.staticMap!(
-                    optionallyRemoveTrailingUnderline, std.meta.aliasSeqOf!(T.ConstructorInfo.fields))])));
+            std.range.zip(T.ConstructorInfo.fields, builderFields)));
 
     private template BuilderFieldInfo(string member)
     {
