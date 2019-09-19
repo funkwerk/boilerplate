@@ -1036,6 +1036,21 @@ unittest
     }
 }
 
+@("destructors with code that is unsafe, system or throws exceptions")
+{
+    struct S
+    {
+        ~this() { throw new Exception("test"); }
+    }
+
+    struct T
+    {
+        S s;
+
+        mixin(GenerateThis);
+    }
+}
+
 import std.string : format;
 
 enum GetSuperTypeAsString_(string member) = format!`typeof(super).ConstructorInfo.FieldInfo.%s.Type`(member);
@@ -1180,6 +1195,10 @@ mixin template GenerateThisTemplate()
                 bool dupExpr = needToDup!(typeof(Type.init.get));
                 bool passExprAsConst = dupExpr && __traits(compiles, Type(const(Type).init.get.dup));
             }
+
+            // account for unsafe implicit destructor calls
+            enum scopeAttributes = [__traits(getFunctionAttributes, { Type value = Type.init; })];
+            constructorAttributes = constructorAttributes.filter!(a => scopeAttributes.canFind(a)).array;
 
             bool forSuper = false;
 
