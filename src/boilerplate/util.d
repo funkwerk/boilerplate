@@ -572,7 +572,7 @@ public struct Optional(T)
         return this.value.u.t;
     }
 
-    public void opAssign(U)(U value)
+    public U opAssign(U)(U value)
     {
         static if (is(U : Nullable!Arg, Arg))
         {
@@ -586,6 +586,7 @@ public struct Optional(T)
         {
             _assign(value);
         }
+        return value;
     }
 
     private void _assign(T value)
