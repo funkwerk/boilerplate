@@ -728,6 +728,26 @@ unittest
     Outer().to!string.shouldEqual("Outer(Inner())");
 }
 
+@("immutable struct with alias this of const toString")
+unittest
+{
+    struct Inner
+    {
+        string toString() const { return "Inner()"; }
+    }
+
+    immutable struct Outer
+    {
+        Inner inner;
+
+        alias inner this;
+
+        mixin(GenerateToString);
+    }
+
+    Outer().to!string.shouldEqual("Outer(Inner())");
+}
+
 mixin template GenerateToStringTemplate()
 {
 
@@ -789,7 +809,7 @@ mixin template GenerateToStringTemplate()
             return null;
         }
 
-        import boilerplate.autostring : isMemberUnlabeledByDefault, ToString, typeName;
+        import boilerplate.autostring : isFromAliasThis, isMemberUnlabeledByDefault, ToString, typeName;
         import boilerplate.conditions : NonEmpty;
         import boilerplate.util : GenNormalMemberTuple, udaIndex;
         import std.meta : Alias;
@@ -823,7 +843,14 @@ mixin template GenerateToStringTemplate()
         }
         else
         {
-            enum userDefinedStringToString = alreadyHaveStringToString;
+            static if (alreadyHaveStringToString)
+            {
+                enum userDefinedStringToString = !isFromAliasThis!(typeof(this), "toString");
+            }
+            else
+            {
+                enum userDefinedStringToString = false;
+            }
             enum userDefinedVoidToString = alreadyHaveVoidToString;
         }
 
@@ -1441,6 +1468,20 @@ enum hasOwnStringToString(Aggregate, Super)
 
 enum hasOwnVoidToString(Aggregate, Super)
     = hasOwnFunction!(Aggregate, Super, "toString", typeof(VoidToStringSample.toString));
+
+public template isFromAliasThis(T, string member)
+{
+    import std.meta : anySatisfy;
+
+    private template isFromThatAliasThis(string field)
+    {
+        enum bool isFromThatAliasThis = __traits(isSame,
+            __traits(getMember, __traits(getMember, T.init, field), member),
+            __traits(getMember, T, member));
+    }
+
+    enum bool isFromAliasThis = anySatisfy!(isFromThatAliasThis, __traits(getAliasThis, T));
+}
 
 @("correctly recognizes the existence of string toString() in a class")
 unittest
