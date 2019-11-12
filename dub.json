@@ -19,7 +19,7 @@
 		{
 			"name": "unittest",
 			"targetType": "executable",
-			"preBuildCommands": ["$DUB run --compiler=$$DC unit-threaded -c gen_ut_main -- -f bin/ut.d"],
+			"preBuildCommands": ["$DUB run --compiler=$$DC unit-threaded -c gen_ut_main -- -f build/ut.d"],
 			"mainSourceFile": "build/ut.d",
 			"sourcePaths": ["src", "unittest"],
 			"importPaths": ["src", "unittest"]
