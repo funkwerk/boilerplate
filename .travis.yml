@@ -6,7 +6,6 @@ os:
 language: d
 
 d:
- - dmd-2.082.1
  - dmd-2.086.1
 
 env: 
