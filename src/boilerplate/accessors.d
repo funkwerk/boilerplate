@@ -74,7 +74,7 @@ public static string GenerateFieldDecls_(FieldType, Attributes...)
 
     static if (udaIndex!(ConstRead, Attributes) != -1)
     {
-        string constReaderDecl = GenerateConstReader!(FieldType, Attributes)
+        string constReaderDecl = GenerateConstReader!(const(FieldType), Attributes)
             (name, fieldIsStatic, fieldIsUnsafe, synchronize);
 
         debug (accessors) pragma(msg, constReaderDecl);
@@ -316,7 +316,17 @@ string GenerateConstReader(T, Attributes...)(string name, bool isStatic, bool is
 
     string attributesString = generateAttributeString(attributes);
 
-    string accessorBody = format!`return this.%s; `(name);
+    static if (DeepConst!(Unqual!T) && !is(Unqual!T == T))
+    {
+        // necessitated by DMD bug https://issues.dlang.org/show_bug.cgi?id=18545
+        string accessorBody = format!`typeof(cast() this.%s) var = this.%s; return var;`(name, name);
+        string type = format!`typeof(cast() const(typeof(this)).init.%s)`(name);
+    }
+    else
+    {
+        string accessorBody = format!`return this.%s; `(name);
+        string type = format!`const(typeof(this.%s))`(name);
+    }
 
     if (synchronize)
     {
@@ -335,12 +345,12 @@ string GenerateConstReader(T, Attributes...)(string name, bool isStatic, bool is
             outCondition = format!` out(result) { %s } body`(checks);
         }
 
-        return format("%s%s final @property const(typeof(this.%s)) %s()%s%s { %s}",
-            visibility, modifiers, name, accessorName, attributesString, outCondition, accessorBody);
+        return format("%s%s final @property %s %s()%s%s { %s}",
+            visibility, modifiers, type, accessorName, attributesString, outCondition, accessorBody);
     }
 
-    return format("%s%s final @property const(typeof(this.%s)) %s() const%s { %s}",
-        visibility, modifiers, name, accessorName, attributesString, accessorBody);
+    return format("%s%s final @property %s %s() const%s { %s}",
+        visibility, modifiers, type, accessorName, attributesString, accessorBody);
 }
 
 string GenerateWriter(T, Attributes...)(string name, string fieldCode, bool isStatic, bool isUnsafe, bool synchronize)
@@ -989,6 +999,22 @@ nothrow pure @safe unittest
     {
         Field[] arr = foo;
     }
+}
+
+@("ConstRead with tailconst type")
+nothrow pure @safe unittest
+{
+    struct S
+    {
+        @ConstRead
+        string foo_;
+
+        mixin(GenerateFieldAccessors);
+    }
+
+    auto var = S().foo;
+
+    static assert(is(typeof(var) == string));
 }
 
 @("generates safe static properties for static members")
