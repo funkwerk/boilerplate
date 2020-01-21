@@ -1564,3 +1564,56 @@ unittest
 
     auto builder = Wrapper.Builder();
 }
+
+@("const nullable assignment")
+unittest
+{
+    import std.typecons : Nullable;
+
+    // non-reference type
+    struct Foo
+    {
+    }
+
+    struct Bar
+    {
+        Nullable!Foo foo;
+
+        mixin(GenerateThis);
+    }
+
+    auto builder = Bar.Builder();
+
+    // trigger assignment bug where dmd tries to roundtrip over const(Foo), implicitly triggering .get
+    // avoided by additional assignment overload in the Nullable case
+    builder.foo = Nullable!(const Foo)();
+}
+
+// can't strip const, because int[] is a reference type and precludes it
+@("const nullable assignment with reference type")
+unittest
+{
+    import std.typecons : Nullable, nullable;
+
+    struct Foo
+    {
+        int[] reference;
+    }
+
+    struct Bar
+    {
+        Nullable!Foo foo;
+
+        mixin(GenerateThis);
+    }
+
+    auto builder = Bar.Builder();
+
+    int[] array = [2];
+    auto foo = Foo(array);
+
+    // direct assignment still works
+    static assert(__traits(compiles, { builder.foo = foo.nullable; }));
+    // but const assignment is blocked by opAssign(U)
+    static assert(!__traits(compiles, { builder.foo = (cast(const) foo).nullable; }));
+}

@@ -576,11 +576,30 @@ public struct Optional(T)
     {
         static if (is(U : Nullable!Arg, Arg))
         {
-            // force-bypass the drug-fuelled `alias get this` idiocy by manually converting
-            // value to the strictly (const) correct type for the assign() call
-            T implConvertedValue = value;
+            import std.traits : Unqual;
 
-            _assign(implConvertedValue);
+            // fixup Nullable!(const T) -> Nullable!T
+            // Nullable!(const T) is a type that should not ever have been allowed to exist.
+            static if (is(T == Nullable!(Unqual!Arg)))
+            {
+                static assert(is(Arg: Unqual!Arg), "Cannot assign Nullable!" ~ Arg.stringof ~ " to " ~ T.stringof);
+                if (value.isNull)
+                {
+                    _assign(T());
+                }
+                else
+                {
+                    _assign(T(value.get));
+                }
+            }
+            else
+            {
+                // force-bypass the drug-fuelled `alias get this` idiocy by manually converting
+                // value to the strictly (const) correct type for the assign() call
+                T implConvertedValue = value;
+
+                _assign(implConvertedValue);
+            }
         }
         else
         {
