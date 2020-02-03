@@ -8,7 +8,7 @@ public alias Builder(T) = typeof(T.Builder());
 
 public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderProxy, alias _toInfo = _toInfo)
 {
-    import boilerplate.util : formatNamed, Optional, optionallyRemoveTrailingUnderline, removeTrailingUnderline;
+    import boilerplate.util : Optional, optionallyRemoveTrailingUnderline, removeTrailingUnderline;
     static import std.algorithm;
     static import std.format;
     static import std.meta;
@@ -27,9 +27,7 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
     {
         private enum string[] builderFields = [];
     }
-    private enum fieldInfoList = std.range.array(
-        std.algorithm.map!_toInfo(
-            std.range.zip(T.ConstructorInfo.fields, builderFields)));
+    private enum fieldInfoList = std.range.zip(T.ConstructorInfo.fields, builderFields);
 
     private template BuilderFieldInfo(string member)
     {
@@ -70,9 +68,9 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
         }
     }
 
-    static foreach (info; fieldInfoList)
+    static foreach (typeField, builderField; fieldInfoList)
     {
-        mixin(formatNamed!q{public BuilderFieldInfo!(info.typeField).Type %(builderField);}.values(info));
+        mixin(`public BuilderFieldInfo!typeField.Type ` ~ builderField ~ `;`);
     }
 
     public bool isValid() const
@@ -84,45 +82,43 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
     {
         alias Nullable = std.typecons.Nullable;
 
-        static foreach (info; fieldInfoList)
+        static foreach (typeField, builderField; fieldInfoList)
         {
-            mixin(formatNamed!q{
-                static if (BuilderFieldInfo!(info.typeField).isBuildable)
+            static if (BuilderFieldInfo!(typeField).isBuildable)
+            {
+                // if the proxy has never been used as a builder,
+                // ie. either a value was assigned or it was untouched
+                // then a default value may be used instead.
+                if (__traits(getMember, this, builderField)._isUnset)
                 {
-                    // if the proxy has never been used as a builder,
-                    // ie. either a value was assigned or it was untouched
-                    // then a default value may be used instead.
-                    if (this.%(builderField)._isUnset)
+                    static if (!__traits(getMember, T.ConstructorInfo.FieldInfo, typeField).useDefault)
                     {
-                        static if (!T.ConstructorInfo.FieldInfo.%(typeField).useDefault)
-                        {
-                            return Nullable!string(
-                                "required field '%(builderField)' not set in builder of " ~ T.stringof);
-                        }
+                        return Nullable!string(
+                            "required field '" ~ builderField ~ "' not set in builder of " ~ T.stringof);
                     }
-                    else if (this.%(builderField)._isBuilder)
-                    {
-                        auto subError = this.%(builderField)._builder.getError;
+                }
+                else if (__traits(getMember, this, builderField)._isBuilder)
+                {
+                    auto subError = __traits(getMember, this, builderField)._builder.getError;
 
-                        if (!subError.isNull)
-                        {
-                            return Nullable!string(subError.get ~ " of " ~ T.stringof);
-                        }
-                    }
-                    // else it carries a full value.
-                }
-                else
-                {
-                    static if (!T.ConstructorInfo.FieldInfo.%(typeField).useDefault)
+                    if (!subError.isNull)
                     {
-                        if (this.%(builderField).isNull)
-                        {
-                            return Nullable!string(
-                                "required field '%(builderField)' not set in builder of " ~ T.stringof);
-                        }
+                        return Nullable!string(subError.get ~ " of " ~ T.stringof);
                     }
                 }
-            }.values(info));
+                // else it carries a full value.
+            }
+            else
+            {
+                static if (!__traits(getMember, T.ConstructorInfo.FieldInfo, typeField).useDefault)
+                {
+                    if (__traits(getMember, this, builderField).isNull)
+                    {
+                        return Nullable!string(
+                            "required field '" ~ builderField ~ "' not set in builder of " ~ T.stringof);
+                    }
+                }
+            }
         }
         return Nullable!string();
     }
@@ -139,56 +135,54 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
     }
     do
     {
-        auto getArg(Info info)()
+        auto getArg(string typeField, string builderField)()
         {
-            mixin(formatNamed!q{
-                static if (BuilderFieldInfo!(info.typeField).isBuildable)
+            static if (BuilderFieldInfo!(typeField).isBuildable)
+            {
+                if (__traits(getMember, this, builderField)._isBuilder)
                 {
-                    if (this.%(builderField)._isBuilder)
-                    {
-                        return this.%(builderField)._builderValue;
-                    }
-                    else if (this.%(builderField)._isValue)
-                    {
-                        return this.%(builderField)._value;
-                    }
-                    else
-                    {
-                        assert(this.%(builderField)._isUnset);
-
-                        static if (T.ConstructorInfo.FieldInfo.%(typeField).useDefault)
-                        {
-                            return T.ConstructorInfo.FieldInfo.%(typeField).fieldDefault;
-                        }
-                        else
-                        {
-                            assert(false, "isValid/build do not match 1");
-                        }
-                    }
+                    return __traits(getMember, this, builderField)._builderValue;
+                }
+                else if (__traits(getMember, this, builderField)._isValue)
+                {
+                    return __traits(getMember, this, builderField)._value;
                 }
                 else
                 {
-                    if (!this.%(builderField).isNull)
+                    assert(__traits(getMember, this, builderField)._isUnset);
+
+                    static if (__traits(getMember, T.ConstructorInfo.FieldInfo, typeField).useDefault)
                     {
-                        return this.%(builderField)._get;
+                        return __traits(getMember, T.ConstructorInfo.FieldInfo, typeField).fieldDefault;
                     }
                     else
                     {
-                        static if (T.ConstructorInfo.FieldInfo.%(typeField).useDefault)
-                        {
-                            return T.ConstructorInfo.FieldInfo.%(typeField).fieldDefault;
-                        }
-                        else
-                        {
-                            assert(false, "isValid/build do not match 2");
-                        }
+                        assert(false, "isValid/build do not match 1");
                     }
                 }
-            }.values(info));
+            }
+            else
+            {
+                if (!__traits(getMember, this, builderField).isNull)
+                {
+                    return __traits(getMember, this, builderField)._get;
+                }
+                else
+                {
+                    static if (__traits(getMember, T.ConstructorInfo.FieldInfo, typeField).useDefault)
+                    {
+                        return __traits(getMember, T.ConstructorInfo.FieldInfo, typeField).fieldDefault;
+                    }
+                    else
+                    {
+                        assert(false, "isValid/build do not match 2");
+                    }
+                }
+            }
         }
 
         enum getArgArray = std.range.array(
-            std.algorithm.map!(i => std.format.format!`getArg!(fieldInfoList[%s])`(i))(
+            std.algorithm.map!(i => std.format.format!`getArg!(fieldInfoList[%s][0], fieldInfoList[%s][1])`(i, i))(
                 std.range.iota(fieldInfoList.length)));
 
         static if (is(T == class))
