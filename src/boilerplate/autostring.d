@@ -728,6 +728,28 @@ unittest
     Outer().to!string.shouldEqual("Outer(Inner())");
 }
 
+// regression
+@("mutable struct with alias this of sink toString")
+unittest
+{
+    struct Inner
+    {
+        public void toString(scope void delegate(const(char)[]) sink) const
+        {
+            sink("Inner()");
+        }
+    }
+
+    struct Outer
+    {
+        Inner inner;
+
+        alias inner this;
+
+        mixin(GenerateToString);
+    }
+}
+
 @("immutable struct with alias this of const toString")
 unittest
 {
@@ -750,7 +772,6 @@ unittest
 
 mixin template GenerateToStringTemplate()
 {
-
     // this is a separate function to reduce the
     // "warning: unreachable code" spam that is falsely created from static foreach
     private static generateToStringErrCheck()
@@ -809,7 +830,8 @@ mixin template GenerateToStringTemplate()
             return null;
         }
 
-        import boilerplate.autostring : isFromAliasThis, isMemberUnlabeledByDefault, ToString, typeName;
+        import boilerplate.autostring :
+            hasOwnStringToString, hasOwnVoidToString, isMemberUnlabeledByDefault, ToString, typeName;
         import boilerplate.conditions : NonEmpty;
         import boilerplate.util : GenNormalMemberTuple, udaIndex;
         import std.meta : Alias;
@@ -843,15 +865,8 @@ mixin template GenerateToStringTemplate()
         }
         else
         {
-            static if (alreadyHaveStringToString)
-            {
-                enum userDefinedStringToString = !isFromAliasThis!(typeof(this), "toString");
-            }
-            else
-            {
-                enum userDefinedStringToString = false;
-            }
-            enum userDefinedVoidToString = alreadyHaveVoidToString;
+            enum userDefinedStringToString = hasOwnStringToString!(typeof(this));
+            enum userDefinedVoidToString = hasOwnVoidToString!(typeof(this));
         }
 
         static if (userDefinedStringToString && userDefinedVoidToString)
@@ -911,7 +926,11 @@ mixin template GenerateToStringTemplate()
                     result ~= format!`pragma(msg, "%s %s");`(alreadyHaveStringToString, alreadyHaveVoidToString);
                 }
 
-                static if (isObject && alreadyHaveVoidToString) result ~= `override `;
+                static if (isObject
+                    && is(typeof(typeof(super).init.toString((void delegate(const(char)[])).init)) == void))
+                {
+                    result ~= `override `;
+                }
 
                 result ~= `public void toString(scope void delegate(const(char)[]) sink) const {`
                     ~ `import boilerplate.autostring: ToStringHandler;`
@@ -1455,29 +1474,70 @@ public template typeName(T)
     }
 }
 
-private final abstract class StringToStringSample {
+public template hasOwnStringToString(Aggregate, Super)
+if (is(Aggregate: Object))
+{
+    enum hasOwnStringToString = hasOwnFunction!(Aggregate, Super, "toString", typeof(StringToStringSample.toString));
+}
+
+public template hasOwnStringToString(Aggregate)
+if (is(Aggregate == struct))
+{
+    static if (is(typeof(Aggregate.init.toString()) == string))
+    {
+        enum hasOwnStringToString = !isFromAliasThis!(
+            Aggregate, "toString", typeof(StringToStringSample.toString));
+    }
+    else
+    {
+        enum hasOwnStringToString = false;
+    }
+}
+
+public template hasOwnVoidToString(Aggregate, Super)
+if (is(Aggregate: Object))
+{
+    enum hasOwnVoidToString = hasOwnFunction!(Aggregate, Super, "toString", typeof(VoidToStringSample.toString));
+}
+
+public template hasOwnVoidToString(Aggregate)
+if (is(Aggregate == struct))
+{
+    static if (is(typeof(Aggregate.init.toString((void delegate(const(char)[])).init)) == void))
+    {
+        enum hasOwnVoidToString = !isFromAliasThis!(
+            Aggregate, "toString", typeof(VoidToStringSample.toString));
+    }
+    else
+    {
+        enum hasOwnVoidToString = false;
+    }
+}
+
+private final abstract class StringToStringSample
+{
     override string toString();
 }
 
-private final abstract class VoidToStringSample {
+private final abstract class VoidToStringSample
+{
     void toString(scope void delegate(const(char)[]) sink);
 }
 
-enum hasOwnStringToString(Aggregate, Super)
-    = hasOwnFunction!(Aggregate, Super, "toString", typeof(StringToStringSample.toString));
-
-enum hasOwnVoidToString(Aggregate, Super)
-    = hasOwnFunction!(Aggregate, Super, "toString", typeof(VoidToStringSample.toString));
-
-public template isFromAliasThis(T, string member)
+public template isFromAliasThis(T, string member, Type)
 {
-    import std.meta : anySatisfy;
+    import std.meta : AliasSeq, anySatisfy, Filter;
+
+    enum FunctionMatchesType(alias Fun) = is(Unqual!(typeof(Fun)) == Type);
 
     private template isFromThatAliasThis(string field)
     {
+        alias aliasMembers = AliasSeq!(__traits(getOverloads, __traits(getMember, T.init, field), member));
+        alias ownMembers = AliasSeq!(__traits(getOverloads, T, member));
+
         enum bool isFromThatAliasThis = __traits(isSame,
-            __traits(getMember, __traits(getMember, T.init, field), member),
-            __traits(getMember, T, member));
+            Filter!(FunctionMatchesType, aliasMembers),
+            Filter!(FunctionMatchesType, ownMembers));
     }
 
     enum bool isFromAliasThis = anySatisfy!(isFromThatAliasThis, __traits(getAliasThis, T));
