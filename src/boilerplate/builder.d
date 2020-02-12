@@ -46,7 +46,8 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
 
         // type has a builder ... that constructs it
         // protects from such IDIOTIC DESIGN ERRORS as `alias Nullable!T.get this`
-        static if (__traits(hasMember, BaseType, "Builder"))
+        // NOTE: can't use hasMember because https://issues.dlang.org/show_bug.cgi?id=13269
+        static if (__traits(compiles, BaseType.Builder()))
         {
             alias BuilderResultType = typeof(BaseType.Builder().builderValue);
 
