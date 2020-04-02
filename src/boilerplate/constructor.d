@@ -1084,8 +1084,8 @@ mixin template GenerateThisTemplate()
         }
 
         import boilerplate.constructor :
-            GetMemberTypeAsString_, GetSuperTypeAsString_,
-            MemberAttributes_, MemberDefault_, MemberUseDefault_,
+            filterCanFind, GetMemberTypeAsString_, GetSuperTypeAsString_,
+            mapFormat, MemberAttributes_, MemberDefault_, MemberUseDefault_,
             SuperAttributes_, SuperDefault_, SuperUseDefault_,
             This;
         import boilerplate.util :
@@ -1198,7 +1198,7 @@ mixin template GenerateThisTemplate()
 
             // account for unsafe implicit destructor calls
             enum scopeAttributes = [__traits(getFunctionAttributes, { Type value = Type.init; })];
-            constructorAttributes = constructorAttributes.filter!(a => scopeAttributes.canFind(a)).array;
+            constructorAttributes = constructorAttributes.filterCanFind(scopeAttributes);
 
             bool forSuper = false;
 
@@ -1240,14 +1240,13 @@ mixin template GenerateThisTemplate()
                         {
                             enum lambdaAttributes = [__traits(getFunctionAttributes, initArg)];
                         }
-
-                        constructorAttributes = constructorAttributes.filter!(a => lambdaAttributes.canFind(a)).array;
+                        constructorAttributes = constructorAttributes.filterCanFind(lambdaAttributes);
                     }
                     else static if (nakedLambda)
                     {
                         enum lambdaAttributes = [__traits(getFunctionAttributes, initArg)];
 
-                        constructorAttributes = constructorAttributes.filter!(a => lambdaAttributes.canFind(a)).array;
+                        constructorAttributes = constructorAttributes.filterCanFind(lambdaAttributes);
                     }
                 }
 
@@ -1265,7 +1264,7 @@ mixin template GenerateThisTemplate()
 
             if (dupExpr)
             {
-                constructorAttributes = constructorAttributes.filter!(a => a != "@nogc").array;
+                constructorAttributes = constructorAttributes.filter!(q{a != "@nogc"}).array;
 
                 static if (isNullable)
                 {
@@ -1312,7 +1311,7 @@ mixin template GenerateThisTemplate()
                 fieldDefault.reorder(constructorFieldOrder),
                 fieldAttributes.reorder(constructorFieldOrder),
             )
-            .map!(args => format!`ConstructorField!(%s, %s, %s, %s)`(args[0], args[1], args[2], args[3]))
+            .map!(q{format!`ConstructorField!(%s, %s, %s, %s)`(a[0], a[1], a[2], a[3])})
             .array
         );
 
@@ -1337,9 +1336,7 @@ mixin template GenerateThisTemplate()
         else
         {
             result ~= visibility ~ ` this(`
-                ~ constructorFieldOrder
-                    .map!(i => format!`%s %s%s`(types[i], args[i], defaultAssignments[i]))
-                    .join(`, `)
+                ~ constructorFieldOrder.mapFormat!`%s %s%s`(types, args, defaultAssignments).join(`, `)
                 ~ format!`) %-(%s %)`(constructorAttributes);
 
             result ~= `{`;
@@ -1349,9 +1346,7 @@ mixin template GenerateThisTemplate()
                 result ~= `super(` ~ args[0 .. argsPassedToSuper].join(", ") ~ `);`;
             }
 
-            result ~= fields.length.iota.drop(argsPassedToSuper)
-                .map!(i => format!`this.%s = %s;`(fields[i], argexprs[i]))
-                .join;
+            result ~= fields.length.iota.drop(argsPassedToSuper).mapFormat!`this.%s = %s;`(fields, argexprs).join;
 
             foreach (i, field; directInitFields)
             {
@@ -1370,7 +1365,7 @@ mixin template GenerateThisTemplate()
             result ~= `}`;
 
             result ~= `protected static enum string[] GeneratedConstructorAttributes_ = [`
-                ~ constructorAttributes.map!(a => `"` ~ a ~ `"`).join(`, `)
+                ~ constructorAttributes.map!(q{`"` ~ a ~ `"`}).join(`, `)
                 ~ `];`;
         }
 
@@ -1430,7 +1425,7 @@ if (fields_.length == Fields.length
 
     mixin(
         format!q{public alias Types = AliasSeq!(%-(%s, %)); }
-        (fields.map!(field => format!"FieldInfo.%s.Type"(field)).array));
+            (fields.map!(field => format!"FieldInfo.%s.Type"(field)).array));
 }
 
 enum ThisEnum
@@ -1616,4 +1611,26 @@ unittest
     static assert(__traits(compiles, { builder.foo = foo.nullable; }));
     // but const assignment is blocked by opAssign(U)
     static assert(!__traits(compiles, { builder.foo = (cast(const) foo).nullable; }));
+}
+
+// helper to avoid lambda, std.algorithm use in heavily-reused mixin GenerateThisTemplate
+public string[] filterCanFind(string[] array, string[] other)
+{
+    import std.algorithm : canFind, filter;
+
+    return array.filter!(a => other.canFind(a)).array;
+}
+
+// ditto
+public string[] mapFormat(string fmt, Range, T...)(Range range, T args)
+{
+    import std.algorithm : map;
+    import std.format : format;
+    import std.range : iota, join;
+
+    enum argElements = T.length.iota.map!(k => format!"args[%s][i]"(k)).join(", ");
+
+    return range.map!((i) {
+        return mixin("format!fmt(" ~ argElements ~ ")");
+    }).array;
 }

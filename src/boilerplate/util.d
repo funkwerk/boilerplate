@@ -1,8 +1,10 @@
 module boilerplate.util;
 
+import std.algorithm : map;
 import std.format;
 import std.meta;
 import std.range : iota;
+import std.string : join;
 import std.traits;
 
 static if (__traits(compiles, { import config.string : toString; }))
@@ -258,10 +260,8 @@ T[] bucketSort(T)(T[] inputArray, size_t delegate(T) rankfn)
 
 void sinkWrite(T...)(scope void delegate(const(char)[]) sink, ref bool comma, bool escapeStrings, string fmt, T args)
 {
-    import std.algorithm : map;
     import std.datetime : SysTime;
-    import std.format : format, formattedWrite;
-    import std.string : join;
+    import std.format : formattedWrite;
     import std.typecons : Nullable;
 
     static if (T.length == 1) // check for optional field: single Nullable
@@ -330,9 +330,11 @@ void sinkWrite(T...)(scope void delegate(const(char)[]) sink, ref bool comma, bo
 
         comma = true;
 
-        mixin(`sink.formattedWrite(fmt, ` ~ T.length.iota.map!(i => format!"replaceArg!%s"(i)).join(", ") ~ `);`);
+        mixin(`sink.formattedWrite(fmt, ` ~ replaceArgHelper!(T.length) ~ `);`);
     }
 }
+
+private enum replaceArgHelper(size_t length) = length.iota.map!(i => format!"replaceArg!%s"(i)).join(", ");
 
 private auto wrapFormatType(T)(T value, bool escapeStrings)
 {
