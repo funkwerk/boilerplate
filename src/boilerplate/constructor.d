@@ -1383,13 +1383,13 @@ mixin template GenerateThisTemplate()
 
         result ~= visibility ~ ` auto BuilderFrom()() const
         {
-            import boilerplate.util : removeTrailingUnderline;
+            import boilerplate.util : optionallyRemoveTrailingUnderline;
 
             auto builder = BuilderType!()();
 
             static foreach (field; ConstructorInfo.fields)
             {
-                mixin("builder." ~ field.removeTrailingUnderline ~ " = this." ~ field ~ ";");
+                mixin("builder." ~ optionallyRemoveTrailingUnderline!field ~ " = this." ~ field ~ ";");
             }
             return builder;
         }`;

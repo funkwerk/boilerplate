@@ -71,6 +71,7 @@ unittest
         version_ = 5;
 
         assert(value.version_ == 5);
+        assert(value.BuilderFrom().value.version_ == 5);
     }
 }
 
