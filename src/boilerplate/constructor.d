@@ -1613,6 +1613,30 @@ unittest
     static assert(!__traits(compiles, { builder.foo = (cast(const) foo).nullable; }));
 }
 
+@("nullable null assignment to buildable field")
+unittest
+{
+    import std.typecons : Nullable;
+
+    struct Foo
+    {
+        mixin(GenerateThis);
+    }
+
+    struct Bar
+    {
+        Nullable!Foo foo;
+
+        mixin(GenerateThis);
+    }
+
+    auto builder = Bar.Builder();
+
+    builder.foo = Nullable!Foo();
+
+    builder.value.shouldEqual(Bar(Nullable!Foo()));
+}
+
 // helper to avoid lambda, std.algorithm use in heavily-reused mixin GenerateThisTemplate
 public string[] filterCanFind(string[] array, string[] other)
 {

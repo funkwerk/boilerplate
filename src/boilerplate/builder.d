@@ -233,11 +233,11 @@ public struct BuilderProxy(T)
 
     private union Data
     {
-        InnerType value;
+        T value;
 
         Builder!InnerType builder;
 
-        this(inout(InnerType) value) inout pure
+        this(inout(T) value) inout pure
         {
             this.value = value;
         }
@@ -275,13 +275,7 @@ public struct BuilderProxy(T)
 
         static if (isNullable)
         {
-            if (value.isNull)
-            {
-                this.mode = Mode.unset;
-                return;
-            }
-
-            DataWrapper newWrapper = DataWrapper(Data(value.get));
+            DataWrapper newWrapper = DataWrapper(Data(value));
         }
         else
         {
@@ -329,14 +323,7 @@ public struct BuilderProxy(T)
     }
     do
     {
-        static if (isNullable)
-        {
-            return inout(T)(this.wrapper.data.value);
-        }
-        else
-        {
-            return this.wrapper.data.value;
-        }
+        return this.wrapper.data.value;
     }
 
     public ref auto _builder() inout
@@ -381,9 +368,19 @@ public struct BuilderProxy(T)
         }
         else if (this.mode == Mode.value)
         {
-            static if (__traits(compiles, value.BuilderFrom()))
+            static if (isNullable)
+            {
+                assert(
+                    !this.wrapper.data.value.isNull,
+                    "Builder: cannot set sub-field directly since field was explicitly initialized to Nullable.null");
+                auto value = this.wrapper.data.value.get;
+            }
+            else
             {
                 auto value = this.wrapper.data.value;
+            }
+            static if (__traits(compiles, value.BuilderFrom()))
+            {
                 auto newWrapper = DataWrapper(Data(value.BuilderFrom()));
 
                 this.mode = Mode.builder;
