@@ -141,6 +141,11 @@ uint filterAttributes(T)(bool isStatic, bool isUnsafe, FilterMode mode)
     if (needToDup!T)
     {
         attributes &= ~FunctionAttribute.nogc;
+        static if (isAssociativeArray!T)
+        {
+            // int[int].dup can throw apparently
+            attributes &= ~FunctionAttribute.nothrow_;
+        }
     }
     // Nullable.opAssign is not nogc
     if (mode == FilterMode.Writer && isInstanceOf!(Nullable, T))
@@ -174,12 +179,16 @@ string GenerateReader(T, Attributes...)(string name, bool fieldIsStatic, bool fi
 {
     import boilerplate.util : needToDup;
     import std.string : format;
-    import std.traits : Unqual;
 
     auto example = T.init;
     auto accessorName = accessor(name);
     enum visibility = getVisibility!(Read, __traits(getAttributes, example));
     enum needToDupField = needToDup!T;
+
+    static if (isAssociativeArray!T)
+    {
+        fieldIsUnsafe = true;
+    }
 
     uint attributes = inferAttributes!(T, "__postblit") &
         filterAttributes!T(fieldIsStatic, fieldIsUnsafe, FilterMode.Reader);
@@ -201,7 +210,18 @@ string GenerateReader(T, Attributes...)(string name, bool fieldIsStatic, bool fi
     // so we can safely reassign to a non-const type
     static if (needToDupField)
     {
-        accessorBody = format!`return typeof(this.%s).init ~ this.%s;`(name, name);
+        static if (isArray!T)
+        {
+            accessorBody = format!`return typeof(this.%s).init ~ this.%s;`(name, name);
+        }
+        else static if (isAssociativeArray!T)
+        {
+            accessorBody = format!`return cast(typeof(this.%s)) this.%s.dup;`(name, name);
+        }
+        else
+        {
+            static assert(false, "logic error: need to dup but don't know how");
+        }
     }
     else static if (DeepConst!(Unqual!T) && !is(Unqual!T == T))
     {
@@ -1098,7 +1118,7 @@ unittest
     }
 }
 
-@("correctly handles nullable array dupping")
+@("dups nullable arrays")
 unittest
 {
     class Class
@@ -1116,6 +1136,32 @@ unittest
     const Thing thing;
 
     assert(thing.classes.length == 0);
+}
+
+@("dups associative arrays")
+unittest
+{
+    struct Thing
+    {
+        @Read
+        @Write
+        private int[int] value_;
+
+        mixin(GenerateFieldAccessors);
+    }
+
+    auto thing = Thing([2: 3]);
+    auto value = [2: 3];
+
+    thing.value = value;
+
+    // overwrite return value of @Read
+    thing.value[2] = 4;
+    // overwrite source value of @Write
+    value[2] = 4;
+
+    // member value is still unchanged.
+    assert(thing.value == [2: 3]);
 }
 
 @("generates invariant checks via precondition for writers")

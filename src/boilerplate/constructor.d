@@ -122,6 +122,24 @@ unittest
 }
 
 ///
+@("dups associative arrays")
+unittest
+{
+    class Class
+    {
+        int[int] array;
+
+        mixin(GenerateThis);
+    }
+
+    auto array = [2: 3];
+    auto obj = new Class(array);
+
+    array[2] = 4;
+    obj.array.shouldEqual([2: 3]);
+}
+
+///
 @("uses default value for default constructor parameter")
 unittest
 {
@@ -1186,18 +1204,28 @@ mixin template GenerateThisTemplate()
 
             static if (!isNullable)
             {
-                bool dupExpr = needToDup!Type;
-                bool passExprAsConst = dupExpr && __traits(compiles, const(Type).init.dup);
+                enum bool dupExpr = needToDup!Type;
+                enum bool passExprAsConst = dupExpr && __traits(compiles, { Type value = const(Type).init.dup; });
             }
             else
             {
                 // unpack nullable for dup
-                bool dupExpr = needToDup!(typeof(Type.init.get));
-                bool passExprAsConst = dupExpr && __traits(compiles, Type(const(Type).init.get.dup));
+                enum bool dupExpr = needToDup!(typeof(Type.init.get));
+                enum bool passExprAsConst = dupExpr && __traits(compiles, { Type value = const(Type).init.get.dup; });
             }
 
-            // account for unsafe implicit destructor calls
-            enum scopeAttributes = [__traits(getFunctionAttributes, { Type value = Type.init; })];
+            enum scopeAttributes = [__traits(getFunctionAttributes, {
+                static if (passExprAsConst) { const Type parameter = Type.init; }
+                else { Type parameter = Type.init; }
+
+                static if (isNullable) { auto value = parameter.get; }
+                else { auto value = parameter; }
+
+                static if (dupExpr)
+                {
+                    Type dupped = value.dup;
+                }
+            })];
             constructorAttributes = constructorAttributes.filterCanFind(scopeAttributes);
 
             bool forSuper = false;

@@ -19,7 +19,7 @@ else
     }
 }
 
-enum needToDup(T) = isArray!(T) && !DeepConst!(T);
+enum needToDup(T) = (isArray!T || isAssociativeArray!T) && !DeepConst!T;
 
 enum DeepConst(T) = __traits(compiles, (const T x) { T y = x; });
 
