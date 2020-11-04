@@ -8,10 +8,6 @@
 
 	"targetType": "library",
 
-	"dependencies": {
-		"unit-threaded": "*"
-	},
-
 	"configurations": [
 		{
 			"name": "library"
@@ -21,6 +17,9 @@
 			"targetType": "executable",
 			"preBuildCommands": ["$DUB run --compiler=$$DC unit-threaded -c gen_ut_main -- -f build/ut.d"],
 			"mainSourceFile": "build/ut.d",
+			"dependencies": {
+				"unit-threaded": "*"
+			},
 			"sourcePaths": ["src", "unittest"],
 			"importPaths": ["src", "unittest"]
 		}

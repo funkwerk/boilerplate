@@ -365,7 +365,7 @@ unittest
     }
 
     (new Class()).i.shouldEqual(0);
-    (new Class()).s.shouldEqual(null);
+    (new Class()).s.shouldEqual(string.init);
 }
 
 ///

@@ -121,7 +121,7 @@ unittest
         mixin(GenerateInvariants);
     }
 
-    (new Class(null)).objs.shouldEqual(null);
+    (new Class(null)).objs.shouldEqual(Object[].init);
     (new Class([null])).shouldThrow!AssertError;
     (new Class([new Object, null])).shouldThrow!AssertError;
 }
