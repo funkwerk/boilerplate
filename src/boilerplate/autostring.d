@@ -306,6 +306,22 @@ unittest
     Struct2.init.to!string.shouldEqual("Struct2(Struct1())");
 }
 
+@("does not label fields with the same name as the type, even if they're nullable")
+unittest
+{
+    import std.typecons : Nullable;
+
+    struct Struct1 { mixin(GenerateToString); }
+
+    struct Struct2
+    {
+        const Nullable!Struct1 struct1;
+        mixin(GenerateToString);
+    }
+
+    Struct2(Nullable!Struct1(Struct1())).to!string.shouldEqual("Struct2(Struct1())");
+}
+
 /++
 This behavior can be prevented by explicitly tagging the field with `@(ToString.Labeled)`.
 +/
@@ -1298,7 +1314,8 @@ public bool isMemberUnlabeledByDefault(Type)(string field, bool attribNonEmpty)
 {
     import std.datetime : SysTime;
     import std.range.primitives : ElementType, isInputRange;
-    import std.typecons : BitFlags;
+    // Types whose toString starts with the contained type
+    import std.typecons : BitFlags, Nullable;
 
     field = field.toLower;
 
@@ -1314,6 +1331,13 @@ public bool isMemberUnlabeledByDefault(Type)(string field, bool attribNonEmpty)
     else static if (is(Type: const BitFlags!BaseType, BaseType))
     {
         if (field == BaseType.stringof.toLower.pluralize)
+        {
+            return true;
+        }
+    }
+    else static if (is(Type: const Nullable!BaseType, BaseType))
+    {
+        if (field == BaseType.stringof.toLower)
         {
             return true;
         }
