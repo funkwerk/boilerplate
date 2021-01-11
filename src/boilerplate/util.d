@@ -98,7 +98,7 @@ string GenNormalMembersCheck(string[] members, bool includeFunctions)
 
         if (member != "this")
         {
-            string check = `__traits(compiles, &typeof(this).init.` ~ member ~ `)`
+            string check = `__traits(compiles, &typeof(this)[].init[0].` ~ member ~ `)`
                 ~ ` && __traits(compiles, typeof(typeof(this).init.` ~ member ~ `))`;
 
             if (!includeFunctions)
