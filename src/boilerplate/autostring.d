@@ -131,6 +131,28 @@ unittest
 }
 
 /++
+The `@(ToString.Optional)` condition predicate
+can also take the whole data type.
++/
+@("can pass exclusion condition to Optional")
+unittest
+{
+    struct Struct
+    {
+        @(ToString.Optional!(self => self.include))
+        int i;
+
+        @(ToString.Exclude)
+        bool include;
+
+        mixin(GenerateToString);
+    }
+
+    Struct(5, false).to!string.shouldEqual("Struct()");
+    Struct(5, true).to!string.shouldEqual("Struct(i=5)");
+}
+
+/++
 The `@(ToString.Include)` tag can be used to explicitly include a member.
 This is intended to be used on property methods.
 +/
@@ -1109,9 +1131,19 @@ mixin template GenerateToStringTemplate()
 
                             static if (is(optionalUda == struct))
                             {
-                                conditionalWritestmt = format!q{
-                                    if (__traits(getAttributes, %s)[%s].condition(%s)) { %%s }
-                                } (membervalue, optionalIndex, membervalue);
+                                alias pred = Alias!(__traits(getAttributes, symbol)[optionalIndex]).condition;
+                                static if (__traits(compiles, pred(typeof(this).init)))
+                                {
+                                    conditionalWritestmt = format!q{
+                                        if (__traits(getAttributes, %s)[%s].condition(this)) { %%s }
+                                    } (membervalue, optionalIndex);
+                                }
+                                else
+                                {
+                                    conditionalWritestmt = format!q{
+                                        if (__traits(getAttributes, %s)[%s].condition(%s)) { %%s }
+                                    } (membervalue, optionalIndex, membervalue);
+                                }
                             }
                             else static if (__traits(compiles, typeof(symbol).init.isNull))
                             {
