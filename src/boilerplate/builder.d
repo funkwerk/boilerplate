@@ -62,6 +62,19 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
                 enum isBuildable = false;
             }
         }
+        else static if (is(FieldType : E[], E))
+        {
+            static if (__traits(compiles, E.Builder()))
+            {
+                alias Type = BuilderProxy!FieldType;
+                enum isBuildable = true;
+            }
+            else
+            {
+                alias Type = Optional!FieldType;
+                enum isBuildable = false;
+            }
+        }
         else
         {
             alias Type = Optional!FieldType;
@@ -140,26 +153,41 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
         {
             static if (BuilderFieldInfo!(typeField).isBuildable)
             {
-                if (__traits(getMember, this, builderField)._isBuilder)
+                import std.meta : Alias;
+
+                alias Type = Alias!(__traits(getMember, T.ConstructorInfo.FieldInfo, typeField)).Type;
+
+                static if (is(Type : E[], E))
                 {
-                    return __traits(getMember, this, builderField)._builderValue;
-                }
-                else if (__traits(getMember, this, builderField)._isValue)
-                {
-                    return __traits(getMember, this, builderField)._value;
+                    if (__traits(getMember, this, builderField)._isArray)
+                    {
+                        return __traits(getMember, this, builderField)._arrayValue;
+                    }
+                    else if (__traits(getMember, this, builderField)._isValue)
+                    {
+                        return __traits(getMember, this, builderField)._value;
+                    }
                 }
                 else
                 {
-                    assert(__traits(getMember, this, builderField)._isUnset);
+                    if (__traits(getMember, this, builderField)._isBuilder)
+                    {
+                        return __traits(getMember, this, builderField)._builderValue;
+                    }
+                    else if (__traits(getMember, this, builderField)._isValue)
+                    {
+                        return __traits(getMember, this, builderField)._value;
+                    }
+                }
+                assert(__traits(getMember, this, builderField)._isUnset);
 
-                    static if (__traits(getMember, T.ConstructorInfo.FieldInfo, typeField).useDefault)
-                    {
-                        return __traits(getMember, T.ConstructorInfo.FieldInfo, typeField).fieldDefault;
-                    }
-                    else
-                    {
-                        assert(false, "isValid/build do not match 1");
-                    }
+                static if (__traits(getMember, T.ConstructorInfo.FieldInfo, typeField).useDefault)
+                {
+                    return __traits(getMember, T.ConstructorInfo.FieldInfo, typeField).fieldDefault;
+                }
+                else
+                {
+                    assert(false, "isValid/build do not match 1");
                 }
             }
             else
@@ -218,6 +246,7 @@ public struct BuilderProxy(T)
         unset,
         builder,
         value,
+        array, // array of builders
     }
 
     static if (is(T : Nullable!Arg, Arg))
@@ -235,16 +264,28 @@ public struct BuilderProxy(T)
     {
         T value;
 
-        Builder!InnerType builder;
-
         this(inout(T) value) inout pure
         {
             this.value = value;
         }
 
-        this(inout(Builder!InnerType) builder) inout pure
+        static if (is(T : E[], E))
         {
-            this.builder = builder;
+            E.BuilderType!()[] array;
+
+            this(inout(E.BuilderType!())[] array) inout pure
+            {
+                this.array = array;
+            }
+        }
+        else
+        {
+            InnerType.BuilderType!() builder;
+
+            this(inout(InnerType.BuilderType!()) builder) inout pure
+            {
+                this.builder = builder;
+            }
         }
     }
 
@@ -263,13 +304,8 @@ public struct BuilderProxy(T)
     }
 
     public void opAssign(T value)
-    in
-    {
-        assert(
-            this.mode != Mode.builder,
-            "Builder: cannot set field by value since a subfield has already been set.");
-    }
-    do
+    in(this.mode != Mode.builder,
+        "Builder: cannot set field by value since a subfield has already been set.")
     {
         import boilerplate.util : move, moveEmplace;
 
@@ -316,34 +352,44 @@ public struct BuilderProxy(T)
         return this.mode == Mode.builder;
     }
 
-    public inout(T) _value() inout
-    in
+    public bool _isArray() const
     {
-        assert(this.mode == Mode.value);
+        return this.mode == Mode.array;
     }
-    do
+
+    public inout(T) _value() inout
+    in (this.mode == Mode.value)
     {
         return this.wrapper.data.value;
     }
 
     public ref auto _builder() inout
-    in
+    in (this.mode == Mode.builder)
     {
-        assert(this.mode == Mode.builder);
-    }
-    do
-    {
-        return this.wrapper.data.builder;
+        static if (is(T : E[], E))
+        {
+            int i = 0;
+
+            assert(i != 0); // assert(false) but return stays "reachable"
+            return E.Builder();
+        }
+        else
+        {
+            return this.wrapper.data.builder;
+        }
     }
 
     public auto _builderValue()
-    in
+    in (this.mode == Mode.builder)
     {
-        assert(this.mode == Mode.builder);
-    }
-    do
-    {
-        static if (isNullable)
+        static if (is(T : E[], E))
+        {
+            int i = 0;
+
+            assert(i != 0); // assert(false) but return stays "reachable"
+            return E.Builder();
+        }
+        else static if (isNullable)
         {
             return T(this.wrapper.data.builder.builderValue);
         }
@@ -353,49 +399,103 @@ public struct BuilderProxy(T)
         }
     }
 
-    alias _implicitBuilder this;
-
-    public @property ref Builder!InnerType _implicitBuilder()
+    public T _arrayValue()
+    in (this.mode == Mode.array)
     {
-        import boilerplate.util : move, moveEmplace;
+        import std.algorithm : map;
+        import std.array : array;
 
-        if (this.mode == Mode.unset)
+        static if (is(T : E[], E))
         {
-            auto newWrapper = DataWrapper(Data(Builder!InnerType.init));
-
-            this.mode = Mode.builder;
-            moveEmplace(newWrapper, this.wrapper);
+            return this.wrapper.data.array.map!"a.builderValue".array;
         }
-        else if (this.mode == Mode.value)
+        else
         {
-            static if (isNullable)
+            assert(false);
+        }
+    }
+
+    static if (is(T : E[], E))
+    {
+        public ref E.BuilderType!() opIndex(size_t index) return
+        in (this.mode == Mode.unset || this.mode == Mode.array,
+            "cannot build array for already initialized field")
+        {
+            import boilerplate.util : moveEmplace;
+
+            if (this.mode == Mode.unset)
             {
-                assert(
-                    !this.wrapper.data.value.isNull,
-                    "Builder: cannot set sub-field directly since field was explicitly initialized to Nullable.null");
-                auto value = this.wrapper.data.value.get;
+                auto newWrapper = DataWrapper(Data(new E.BuilderType!()[](index + 1)));
+
+                this.mode = Mode.array;
+                moveEmplace(newWrapper, this.wrapper);
             }
-            else
+            else while (this.wrapper.data.array.length <= index)
             {
-                auto value = this.wrapper.data.value;
+                this.wrapper.data.array ~= E.Builder();
             }
-            static if (__traits(compiles, value.BuilderFrom()))
+            return this.wrapper.data.array[index];
+        }
+
+        public void opOpAssign(string op, R)(const R rhs)
+        if (op == "~")
+        in (this.mode == Mode.unset || this.mode == Mode.value,
+            "Builder cannot append to array already initialized by index")
+        {
+            if (this.mode == Mode.unset)
             {
-                auto newWrapper = DataWrapper(Data(value.BuilderFrom()));
+                opAssign(null);
+            }
+            opAssign(this.wrapper.data.value ~ rhs);
+        }
+    }
+    else
+    {
+        public @property ref InnerType.BuilderType!() _implicitBuilder()
+        {
+            import boilerplate.util : move, moveEmplace;
+
+            if (this.mode == Mode.unset)
+            {
+                auto newWrapper = DataWrapper(Data(InnerType.BuilderType!().init));
 
                 this.mode = Mode.builder;
-                move(newWrapper, this.wrapper);
+                moveEmplace(newWrapper, this.wrapper);
             }
-            else
+            else if (this.mode == Mode.value)
             {
-                assert(
-                    false,
-                    "Builder: cannot set sub-field directly since field is already being initialized by value " ~
-                    "(and BuilderFrom is unavailable in " ~ typeof(this.wrapper.data.value).stringof ~ ")");
+                static if (isNullable)
+                {
+                    assert(
+                        !this.wrapper.data.value.isNull,
+                        "Builder: cannot set sub-field directly since field was explicitly " ~
+                        "initialized to Nullable.null");
+                    auto value = this.wrapper.data.value.get;
+                }
+                else
+                {
+                    auto value = this.wrapper.data.value;
+                }
+                static if (__traits(compiles, value.BuilderFrom()))
+                {
+                    auto newWrapper = DataWrapper(Data(value.BuilderFrom()));
+
+                    this.mode = Mode.builder;
+                    move(newWrapper, this.wrapper);
+                }
+                else
+                {
+                    assert(
+                        false,
+                        "Builder: cannot set sub-field directly since field is already being initialized by value " ~
+                        "(and BuilderFrom is unavailable in " ~ typeof(this.wrapper.data.value).stringof ~ ")");
+                }
             }
+
+            return this.wrapper.data.builder;
         }
 
-        return this.wrapper.data.builder;
+        alias _implicitBuilder this;
     }
 }
 

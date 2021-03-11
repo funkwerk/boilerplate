@@ -542,7 +542,6 @@ unittest
     [1, 2, 3].reorder([0, 2, 1]).shouldEqual([1, 3, 2]);
 }
 
-// TODO replace with Nullable once pr 19037 is merged
 public struct Optional(T)
 {
     import std.typecons : Nullable;

@@ -752,6 +752,58 @@ unittest
 }
 
 ///
+@("builder supports recursive array index initialization")
+unittest
+{
+    struct Struct1
+    {
+        int value;
+
+        mixin(GenerateThis);
+    }
+
+    struct Struct2
+    {
+        Struct1[] array;
+
+        mixin(GenerateThis);
+    }
+
+    auto builder = Struct2.Builder();
+
+    builder.array[0].value = 1;
+    builder.array[1].value = 2;
+
+    builder.value.shouldEqual(Struct2([Struct1(1), Struct1(2)]));
+}
+
+///
+@("builder supports arrays as values")
+unittest
+{
+    struct Struct1
+    {
+        int value;
+
+        mixin(GenerateThis);
+    }
+
+    struct Struct2
+    {
+        Struct1[] array;
+
+        mixin(GenerateThis);
+    }
+
+    auto builder = Struct2.Builder();
+
+    builder.array ~= Struct1(1);
+    builder.array ~= Struct1(2);
+
+    builder.value.shouldEqual(Struct2([Struct1(1), Struct1(2)]));
+}
+
+///
 @("builder supports overriding value assignment with field assignment later")
 unittest
 {
