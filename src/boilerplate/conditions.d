@@ -510,7 +510,7 @@ private string generateAllNonNull(T)(InfoTuple values)
                 .values(values);
         }
     }
-    else static if (__traits(compiles, isAssociativeArray!T))
+    else static if (__traits(compiles, isAssociativeArray!T) && isAssociativeArray!T)
     {
         enum checkValues = __traits(compiles, T.init.byValue.all!`a !is null`);
         enum checkKeys = __traits(compiles, T.init.byKey.all!"a !is null");
