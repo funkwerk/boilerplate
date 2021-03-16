@@ -62,7 +62,7 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
                 enum isBuildable = false;
             }
         }
-        else static if (is(FieldType : E[], E))
+        else static if (is(FieldType == E[], E))
         {
             static if (__traits(compiles, E.Builder()))
             {
@@ -157,7 +157,7 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
 
                 alias Type = Alias!(__traits(getMember, T.ConstructorInfo.FieldInfo, typeField)).Type;
 
-                static if (is(Type : E[], E))
+                static if (is(Type == E[], E))
                 {
                     if (__traits(getMember, this, builderField)._isArray)
                     {
@@ -269,7 +269,7 @@ public struct BuilderProxy(T)
             this.value = value;
         }
 
-        static if (is(T : E[], E))
+        static if (is(T == E[], E))
         {
             E.BuilderType!()[] array;
 
@@ -366,7 +366,7 @@ public struct BuilderProxy(T)
     public ref auto _builder() inout
     in (this.mode == Mode.builder)
     {
-        static if (is(T : E[], E))
+        static if (is(T == E[], E))
         {
             int i = 0;
 
@@ -382,7 +382,7 @@ public struct BuilderProxy(T)
     public auto _builderValue()
     in (this.mode == Mode.builder)
     {
-        static if (is(T : E[], E))
+        static if (is(T == E[], E))
         {
             int i = 0;
 
@@ -405,7 +405,7 @@ public struct BuilderProxy(T)
         import std.algorithm : map;
         import std.array : array;
 
-        static if (is(T : E[], E))
+        static if (is(T == E[], E))
         {
             return this.wrapper.data.array.map!"a.builderValue".array;
         }
@@ -415,7 +415,7 @@ public struct BuilderProxy(T)
         }
     }
 
-    static if (is(T : E[], E))
+    static if (is(T == E[], E))
     {
         public ref E.BuilderType!() opIndex(size_t index) return
         in (this.mode == Mode.unset || this.mode == Mode.array,

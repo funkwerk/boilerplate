@@ -778,6 +778,33 @@ unittest
 }
 
 ///
+@("builder supports nested struct with alias this")
+unittest
+{
+    struct Struct2
+    {
+        string text;
+
+        alias text this;
+
+        mixin(GenerateThis);
+    }
+
+    struct Struct1
+    {
+        Struct2 nested;
+
+        mixin(GenerateThis);
+    }
+
+    auto builder = Struct1.Builder();
+
+    builder.nested.text = "foo";
+
+    builder.value.shouldEqual(Struct1(Struct2("foo")));
+}
+
+///
 @("builder supports arrays as values")
 unittest
 {
