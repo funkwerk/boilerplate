@@ -197,7 +197,7 @@ unittest
 }
 
 /++
-When <b>any</b> condition check is applied to a nullable field, the test applies to the value,
+When **any** condition check is applied to a nullable field, the test applies to the value,
 if any, contained in the field. The "null" state of the field is ignored.
 +/
 @("doesn't throw when a Nullable field is null")

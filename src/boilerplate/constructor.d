@@ -22,7 +22,9 @@ public enum string GenerateThis = `
     mixin(typeof(this).generateThisImpl());
 `;
 
-///
+/**
+ * `GenerateThis` creates a constructor with a parameter for every field.
+ */
 @("creates a constructor")
 unittest
 {
@@ -38,7 +40,9 @@ unittest
     obj.field.shouldEqual(5);
 }
 
-///
+/**
+ * When the super class also has a generated constructor, it will be called first.
+ */
 @("calls the super constructor if it exists")
 unittest
 {
@@ -62,7 +66,9 @@ unittest
     obj.field2.shouldEqual(8);
 }
 
-///
+/**
+ * Methods are ignored when generating constructors.
+ */
 @("separates fields from methods")
 unittest
 {
@@ -80,7 +86,9 @@ unittest
     obj.field.shouldEqual(5);
 }
 
-///
+/**
+ * When passing arrays to the constructor, these arrays are automatically `dup`-ed.
+ */
 @("dups arrays")
 unittest
 {
@@ -98,7 +106,9 @@ unittest
     obj.array[0].shouldEqual(2);
 }
 
-///
+/**
+ * Arrays passed to the constructor are `dup`-ed even if they're inside a Nullable.
+ */
 @("dups arrays hidden behind Nullable")
 unittest
 {
@@ -121,7 +131,9 @@ unittest
     obj.array.isNull.shouldBeTrue;
 }
 
-///
+/**
+ * Associative arrays are also `dup`-ed.
+ */
 @("dups associative arrays")
 unittest
 {
@@ -139,7 +151,9 @@ unittest
     obj.array.shouldEqual([2: 3]);
 }
 
-///
+/**
+ * `@(This.Default!value)` defines a default value for the constructor parameter.
+ */
 @("uses default value for default constructor parameter")
 unittest
 {
@@ -160,7 +174,11 @@ unittest
     obj2.value.shouldEqual(6);
 }
 
-///
+/**
+ * When using `GenerateThis` in an empty struct, no constructor is created.
+ *
+ * This is because D does not allow empty constructor methods.
+ */
 @("creates no constructor for an empty struct")
 unittest
 {
@@ -172,7 +190,12 @@ unittest
     auto strct = Struct();
 }
 
-///
+/**
+ * `@(This.Default!(lambda))` calls the lambda to generate the default value.
+ *
+ * This is to handle cases like `@(This.Default!(new Class))`, where D would allocate
+ * the class during startup and reuse the same reference for every constructor call.
+ */
 @("properly generates new default values on each call")
 unittest
 {
@@ -192,7 +215,14 @@ unittest
     (cast(void*) obj1.obj).shouldNotEqual(cast(void*) obj2.obj);
 }
 
-///
+/**
+ * When the superclass has a generated constructor, the order of parameters is:
+ *
+ * - Super class fields
+ * - Class fields
+ * - Class fields with default value
+ * - Super class fields with default value
+ */
 @("establishes the parent-child parameter order: parent explicit, child explicit, child implicit, parent implicit.")
 unittest
 {
@@ -224,7 +254,9 @@ unittest
     obj.field2.shouldEqual(4);
 }
 
-///
+/**
+ * No constructor parameter is generated for static fields.
+ */
 @("disregards static fields")
 unittest
 {
@@ -242,7 +274,9 @@ unittest
     obj.field2.shouldEqual(5);
 }
 
-///
+/**
+ * Immutable arrays are supported as constructor parameters.
+ */
 @("can initialize with immutable arrays")
 unittest
 {
@@ -254,7 +288,9 @@ unittest
     }
 }
 
-///
+/**
+ * `@(This.Private/Protected/Public)` can be used to define the visibility scope of the constructor.
+ */
 @("can define scope for constructor")
 unittest
 {
@@ -295,7 +331,9 @@ unittest
     static assert(__traits(getProtection, PublicClass.__ctor) == "public");
 }
 
-///
+/**
+ * `@(This.Private/Protected/Public)` also assigns a visibility scope to the generated builder.
+ */
 @("will assign the same scope to Builder")
 unittest
 {
@@ -334,22 +372,9 @@ unittest
     static assert(__traits(getProtection, PublicClass.Builder) == "public");
 }
 
-///
-@("can use default tag with new")
-unittest
-{
-    class Class
-    {
-        @(This.Default!(() => new Object))
-        Object foo;
-
-        mixin(GenerateThis);
-    }
-
-    ((new Class).foo !is null).shouldBeTrue;
-}
-
-///
+/**
+ * `@(This.Default)` without a parameter uses the default value of the type.
+ */
 @("empty default tag means T()")
 unittest
 {
@@ -368,7 +393,9 @@ unittest
     (new Class()).s.shouldEqual(string.init);
 }
 
-///
+/**
+ * `@(This.Exclude)` excludes a field from being set by the generated constructor.
+ */
 @("can exclude fields from constructor")
 unittest
 {
@@ -383,7 +410,10 @@ unittest
     (new Class).i.shouldEqual(5);
 }
 
-///
+/**
+ * Even if the class holds a field that is not const, a const array can be passed to it
+ * as long as the `dup` of this field does not leak mutable references.
+ */
 @("marks duppy parameters as const when this does not prevent dupping")
 unittest
 {
@@ -403,7 +433,9 @@ unittest
     auto obj = new Class(constValues);
 }
 
-///
+/**
+ * Property functions are disregarded by the generated constructor
+ */
 @("does not include property functions in constructor list")
 unittest
 {
@@ -423,6 +455,9 @@ unittest
     static assert(!__traits(compiles, new Class(0, 0)));
 }
 
+/**
+ * When no parameters need to be dupped, the generated constructor is `@nogc`.
+ */
 @("declares @nogc on non-dupping constructors")
 @nogc unittest
 {
@@ -436,7 +471,10 @@ unittest
     auto str = Struct(5);
 }
 
-///
+/**
+ * `@(This.Init!value)` defines a value for the field that will be assigned in the constructor,
+ * and excludes the field from being a constructor parameter.
+ */
 @("can initialize fields using init value")
 unittest
 {
@@ -457,7 +495,10 @@ unittest
     obj.field2.shouldEqual(8);
 }
 
-///
+/**
+ * `@(This.Init!lambda)`, like `@(This.Default!lambda)`, will be called automatically with `this`
+ * to determine the initializer value.
+ */
 @("can initialize fields using init value, with lambda that accesses previous value")
 unittest
 {
@@ -477,7 +518,9 @@ unittest
     obj.field2.shouldEqual(10);
 }
 
-///
+/**
+ * `@(This.Init!lambda)` can allocate runtime values.
+ */
 @("can initialize fields with allocated types")
 unittest
 {
@@ -503,7 +546,11 @@ unittest
     }
 }
 
-///
+/**
+ * `GenerateThis` creates a `.Builder()` property that can be used to incrementally construct the value.
+ *
+ * `builder.value` will call the generated constructor with the assigned values.
+ */
 @("generates Builder class that gathers constructor parameters, then calls constructor with them")
 unittest
 {
@@ -534,7 +581,9 @@ unittest
     }
 }
 
-///
+/**
+ * The order in which `Builder` fields are set is irrelevant.
+ */
 @("builder field order doesn't matter")
 unittest
 {
@@ -565,7 +614,9 @@ unittest
     }
 }
 
-///
+/**
+ * `Builder` fields with a `@(This.Default)` value can be omitted.
+ */
 @("default fields can be left out when assigning builder")
 unittest
 {
@@ -597,7 +648,9 @@ unittest
     }
 }
 
-///
+/**
+ * `Builder` can be used with structs as well as classes.
+ */
 @("supports Builder in structs")
 unittest
 {
@@ -630,7 +683,9 @@ unittest
     }
 }
 
-///
+/**
+ * `Builder` fields don't contain the trailing newline of a private field.
+ */
 @("builder strips trailing underlines")
 unittest
 {
@@ -650,7 +705,10 @@ unittest
     value.shouldEqual(Struct(1));
 }
 
-///
+/**
+ * When a field in the type has a generated constructor itself, its fields can be set directly
+ * on a `Builder` of the outer type.
+ */
 @("builder supports nested initialization")
 unittest
 {
@@ -691,7 +749,9 @@ unittest
     }
 }
 
-///
+/**
+ * `Builder` can use `@(This.Default)` values for nested fields.
+ */
 @("builder supports defaults for nested values")
 unittest
 {
@@ -721,7 +781,9 @@ unittest
     builder.value.shouldEqual(Struct2(1, 2, Struct1(3, 4)));
 }
 
-///
+/**
+ * `Builder` also allows assigning a single value directly for a nested `Builder` field.
+ */
 @("builder supports direct value assignment for nested values")
 unittest
 {
@@ -751,7 +813,10 @@ unittest
     builder.value.shouldEqual(Struct2(1, Struct1(2, 3), 4));
 }
 
-///
+/**
+ * When a `Builder` field is an array, it can be initialized by
+ * specifying the value for each desired index.
+ */
 @("builder supports recursive array index initialization")
 unittest
 {
@@ -777,7 +842,9 @@ unittest
     builder.value.shouldEqual(Struct2([Struct1(1), Struct1(2)]));
 }
 
-///
+/**
+ * `Builder` handles fields that are aliased to `this`.
+ */
 @("builder supports nested struct with alias this")
 unittest
 {
@@ -804,7 +871,9 @@ unittest
     builder.value.shouldEqual(Struct1(Struct2("foo")));
 }
 
-///
+/**
+ * When a `Builder` field is an array, it can also be initialized by appending values.
+ */
 @("builder supports arrays as values")
 unittest
 {
@@ -830,7 +899,11 @@ unittest
     builder.value.shouldEqual(Struct2([Struct1(1), Struct1(2)]));
 }
 
-///
+/**
+ * When a value has been assigned to a recursive `Builder` field, its fields can still
+ * be individually overridden.
+ * This uses the `BuilderFrom` reverse-`Builder` property.
+ */
 @("builder supports overriding value assignment with field assignment later")
 unittest
 {
@@ -857,7 +930,9 @@ unittest
     builder.value.shouldEqual(Struct2(Struct1(2, 4)));
 }
 
-///
+/**
+ * `Builder` does not attempt to use `BuilderFrom` when this would leak a non-constant reference.
+ */
 @("builder doesn't try to use BuilderFrom for types where nonconst references would have to be taken")
 unittest
 {
@@ -894,7 +969,10 @@ unittest
         "being initialized by value (and BuilderFrom is unavailable in Struct1)");
 }
 
-///
+/**
+ * When a recursive `Builder` field has already been directly assigned, it cannot be
+ * later overwritten with a whole-value assignment.
+ */
 @("builder refuses overriding field assignment with value assignment")
 unittest
 {
@@ -926,7 +1004,9 @@ unittest
     set().shouldThrow!AssertError("Builder: cannot set field by value since a subfield has already been set.");
 }
 
-///
+/**
+ * `Builder` supports assigning const fields.
+ */
 @("builder supports const args")
 unittest
 {
@@ -945,7 +1025,9 @@ unittest
     }
 }
 
-///
+/**
+ * `Builder` supports assigning recursive values with a destructor.
+ */
 @("builder supports fields with destructor")
 unittest
 {
@@ -969,7 +1051,9 @@ unittest
     }
 }
 
-///
+/**
+ * When a `Builder` field is `Nullable!T`, it can be directly assigned a `T`.
+ */
 @("builder supports direct assignment to Nullables")
 unittest
 {
@@ -990,7 +1074,9 @@ unittest
     }
 }
 
-///
+/**
+ * When a `Builder` field is `Nullable!T`, and `T` has a `Builder`, `T`'s fields can be directly assigned.
+ */
 @("builder with passthrough assignment to Nullable structs")
 unittest
 {
@@ -1021,7 +1107,10 @@ unittest
     }
 }
 
-///
+/**
+ * When a `Builder` field is `Nullable!T`, and `T` has a `Builder`, `T` can still be assigned either as
+ * `T` or `Nullable!T`.
+ */
 @("builder with value assignment to Nullable struct field")
 unittest
 {
@@ -1057,7 +1146,10 @@ unittest
     }
 }
 
-///
+/**
+ * A value with `GenerateThis` can be turned back into a builder using `BuilderFrom()`.
+ * This can be used to reassign immutable fields.
+ */
 @("builder supports reconstruction from value")
 unittest
 {
@@ -1082,7 +1174,9 @@ unittest
     }
 }
 
-///
+/**
+ * When a type already has a `value` field, `builderValue` can be used to get the builder value.
+ */
 @("builder supports struct that already contains a value field")
 unittest
 {
@@ -1103,7 +1197,9 @@ unittest
     }
 }
 
-///
+/**
+ * `Builder` will handle structs that contain structs with `@disable(this)`.
+ */
 @("builder supports struct that contains struct that has @disable(this)")
 unittest
 {
