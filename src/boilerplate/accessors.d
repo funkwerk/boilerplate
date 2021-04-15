@@ -253,7 +253,7 @@ string GenerateReader(T, Attributes...)(string name, bool fieldIsStatic, bool fi
         if (auto checks = generateChecksForAttributes!(T, StdMetaFilter!(IsConditionAttribute, Attributes))
             ("result", " in postcondition of @Read"))
         {
-            outCondition = format!` out(result) { %s } body`(checks);
+            outCondition = format!` out(result) { %s } do`(checks);
         }
     }
 
@@ -362,7 +362,7 @@ string GenerateConstReader(T, Attributes...)(string name, bool isStatic, bool is
         if (auto checks = generateChecksForAttributes!(T, StdMetaFilter!(IsConditionAttribute, Attributes))
             ("result", " in postcondition of @ConstRead"))
         {
-            outCondition = format!` out(result) { %s } body`(checks);
+            outCondition = format!` out(result) { %s } do`(checks);
         }
 
         return format("%s%s final @property %s %s()%s%s { %s}",
@@ -396,7 +396,7 @@ string GenerateWriter(T, Attributes...)(string name, string fieldCode, bool isSt
     if (auto checks = generateChecksForAttributes!(T, StdMetaFilter!(IsConditionAttribute, Attributes))
         (inputName, " in precondition of @Write"))
     {
-        precondition = format!` in { import std.format : format; import std.array : empty; %s } body`(checks);
+        precondition = format!` in { import std.format : format; import std.array : empty; %s } do`(checks);
         attributes &= ~FunctionAttribute.nogc;
         attributes &= ~FunctionAttribute.nothrow_;
         // format() is neither pure nor safe

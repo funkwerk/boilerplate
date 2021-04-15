@@ -1,9 +1,9 @@
 module boilerplate.util;
 
-import std.algorithm : map;
+import std.algorithm : map, sort;
 import std.format;
 import std.meta;
-import std.range : iota;
+import std.range : array, iota;
 import std.string : join;
 import std.traits;
 
@@ -518,15 +518,8 @@ unittest
 }
 
 public T[] reorder(T)(T[] source, size_t[] newOrder)
-in
-{
-    import std.algorithm : sort;
-    import std.range : array, iota;
-
-    // newOrder must be a permutation of source indices
-    assert(newOrder.dup.sort.array == source.length.iota.array);
-}
-body
+// newOrder must be a permutation of source indices
+in (newOrder.dup.sort.array == source.length.iota.array)
 {
     import std.algorithm : map;
     import std.range : array;
