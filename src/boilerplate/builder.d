@@ -407,7 +407,10 @@ public struct BuilderProxy(T)
 
         static if (is(T == E[], E))
         {
-            return this.wrapper.data.array.map!"a.builderValue".array;
+            // enforce that E is the return value
+            static E builderValue(Element)(Element element) { return element.builderValue; }
+
+            return this.wrapper.data.array.map!builderValue.array;
         }
         else
         {
