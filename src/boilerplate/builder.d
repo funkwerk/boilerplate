@@ -440,7 +440,7 @@ public struct BuilderProxy(T)
             return this.wrapper.data.array[index];
         }
 
-        public void opOpAssign(string op, R)(const R rhs)
+        public void opOpAssign(string op, R)(R rhs)
         if (op == "~")
         in (this.mode == Mode.unset || this.mode == Mode.value,
             "Builder cannot append to array already initialized by index")

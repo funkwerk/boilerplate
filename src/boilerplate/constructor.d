@@ -1244,6 +1244,30 @@ unittest
     }
 }
 
+@("builder supports appending to transitive non-const fields")
+unittest
+{
+    struct Struct1
+    {
+        int[] values;
+
+        mixin(GenerateThis);
+    }
+
+    struct Struct2
+    {
+        Struct1[] array;
+
+        mixin(GenerateThis);
+    }
+
+    auto builder = Struct2.Builder();
+
+    builder.array ~= [Struct1([1]), Struct1([2])];
+
+    builder.value.shouldEqual(Struct2([Struct1([1]), Struct1([2])]));
+}
+
 import std.string : format;
 
 enum GetSuperTypeAsString_(string member) = format!`typeof(super).ConstructorInfo.FieldInfo.%s.Type`(member);
