@@ -931,45 +931,6 @@ unittest
 }
 
 /**
- * `Builder` does not attempt to use `BuilderFrom` when this would leak a non-constant reference.
- */
-@("builder doesn't try to use BuilderFrom for types where nonconst references would have to be taken")
-unittest
-{
-    import core.exception : AssertError;
-
-    struct Struct1
-    {
-        int a;
-
-        private Object[] b_;
-
-        mixin(GenerateThis);
-    }
-
-    struct Struct2
-    {
-        Struct1 struct1;
-
-        mixin(GenerateThis);
-    }
-
-    // this should at least compile, despite the BuilderFrom hack not working with Struct1
-    auto builder = Struct2.Builder();
-
-    builder.struct1 = Struct1(2, null);
-
-    void set()
-    {
-        builder.struct1.b = null;
-    }
-
-    set().shouldThrow!AssertError(
-        "Builder: cannot set sub-field directly since field is already " ~
-        "being initialized by value (and BuilderFrom is unavailable in Struct1)");
-}
-
-/**
  * When a recursive `Builder` field has already been directly assigned, it cannot be
  * later overwritten with a whole-value assignment.
  */
@@ -1608,7 +1569,15 @@ mixin template GenerateThisTemplate()
             return BuilderType!()();
         }`;
 
-        result ~= visibility ~ ` auto BuilderFrom()() const
+        /**
+         * We are allowed to read the private field values here.
+         * We aren't actually leaking private or mutable information because:
+         * - the constructor will dup it again anyways, if required
+         * - we cannot read it from the Builder, because Builders are write-only
+         * - if we can't read it off the current value, the builderValue will
+         *   have the same type - so we can't read it off there either!
+         */
+        result ~= visibility ~ ` auto BuilderFrom(this This)()
         {
             import boilerplate.util : optionallyRemoveTrailingUnderline;
 
