@@ -1231,27 +1231,6 @@ unittest
 
 import std.string : format;
 
-enum GetSuperTypeAsString_(string member) = format!`typeof(super).ConstructorInfo.FieldInfo.%s.Type`(member);
-
-enum GetMemberTypeAsString_(string member) = format!`typeof(this.%s)`(member);
-
-enum SuperDefault_(string member) = format!`typeof(super).ConstructorInfo.FieldInfo.%s.fieldDefault`(member);
-
-enum MemberDefault_(string member) =
-    format!`getUDADefaultOrNothing!(typeof(this.%s), __traits(getAttributes, this.%s))`(member, member);
-
-enum SuperUseDefault_(string member)
-    = format!(`typeof(super).ConstructorInfo.FieldInfo.%s.useDefault`)(member);
-
-enum MemberUseDefault_(string member)
-    = format!(`udaIndex!(This.Default, __traits(getAttributes, this.%s)) != -1`)(member);
-
-enum SuperAttributes_(string member)
-    = format!(`typeof(super).ConstructorInfo.FieldInfo.%s.attributes`)(member);
-
-enum MemberAttributes_(string member)
-    = format!(`__traits(getAttributes, this.%s)`)(member);
-
 mixin template GenerateThisTemplate()
 {
     private static generateThisImpl()
@@ -1261,11 +1240,7 @@ mixin template GenerateThisTemplate()
             return null;
         }
 
-        import boilerplate.constructor :
-            filterCanFind, GetMemberTypeAsString_, GetSuperTypeAsString_,
-            mapFormat, MemberAttributes_, MemberDefault_, MemberUseDefault_,
-            SuperAttributes_, SuperDefault_, SuperUseDefault_,
-            This;
+        import boilerplate.constructor : filterCanFind, mapFormat, This;
         import boilerplate.util :
             bucketSort, GenNormalMemberTuple, needToDup,
             optionallyRemoveTrailingUnderline,
@@ -1311,10 +1286,7 @@ mixin template GenerateThisTemplate()
         {
             enum argsPassedToSuper = typeof(super).ConstructorInfo.fields.length;
             enum members = typeof(super).ConstructorInfo.fields ~ [NormalMemberTuple];
-            enum string[] CombinedArray(alias SuperPred, alias MemberPred) = ([
-                staticMap!(SuperPred, aliasSeqOf!(typeof(super).ConstructorInfo.fields)),
-                staticMap!(MemberPred, NormalMemberTuple)
-            ]);
+
             constructorAttributes = typeof(super).GeneratedConstructorAttributes_;
         }
         else
@@ -1323,21 +1295,12 @@ mixin template GenerateThisTemplate()
             static if (NormalMemberTuple.length > 0)
             {
                 enum members = [NormalMemberTuple];
-                enum string[] CombinedArray(alias SuperPred, alias MemberPred) = ([
-                    staticMap!(MemberPred, NormalMemberTuple)
-                ]);
             }
             else
             {
                 enum string[] members = null;
-                enum string[] CombinedArray(alias SuperPred, alias MemberPred) = null;
             }
         }
-
-        enum string[] useDefaults = CombinedArray!(SuperUseDefault_, MemberUseDefault_);
-        enum string[] memberTypes = CombinedArray!(GetSuperTypeAsString_, GetMemberTypeAsString_);
-        enum string[] defaults = CombinedArray!(SuperDefault_, MemberDefault_);
-        enum string[] attributes = CombinedArray!(SuperAttributes_, MemberAttributes_);
 
         string[] fields;
         string[] args;
@@ -1355,8 +1318,22 @@ mixin template GenerateThisTemplate()
         {
             enum member = members[i];
 
-            mixin(`alias Type = ` ~ memberTypes[i] ~ `;`);
-            mixin(`enum bool useDefault = ` ~ useDefaults[i] ~ `;`);
+            static if (i < argsPassedToSuper)
+            {
+                enum bool useDefault = __traits(getMember, typeof(super).ConstructorInfo.FieldInfo, member).useDefault;
+                enum string memberTypeAsString = "typeof(super).ConstructorInfo.FieldInfo." ~ member ~ ".Type";
+                enum string default_ = "typeof(super).ConstructorInfo.FieldInfo." ~ member ~ ".fieldDefault";
+                enum string attributes = "typeof(super).ConstructorInfo.FieldInfo." ~ member ~ ".attributes";
+            }
+            else
+            {
+                enum bool useDefault = udaIndex!(This.Default, __traits(getAttributes, __traits(getMember, typeof(this), member))) != -1;
+                enum string memberTypeAsString = "typeof(this." ~ member ~ ")";
+                enum string default_ = "getUDADefaultOrNothing!(typeof(this." ~ member ~ "), __traits(getAttributes, this." ~ member ~ "))";
+                enum string attributes = "__traits(getAttributes, this." ~ member ~ ")";
+            }
+
+            mixin(`alias Type = ` ~ memberTypeAsString ~ `;`);
 
             bool includeMember = false;
 
@@ -1457,11 +1434,11 @@ mixin template GenerateThisTemplate()
                 static if (isNullable)
                 {
                     argexpr = format!`%s.isNull ? %s.init : %s(%s.get.dup)`
-                        (argexpr, memberTypes[i], memberTypes[i], argexpr);
+                        (argexpr, memberTypeAsString, memberTypeAsString, argexpr);
                 }
                 else
                 {
-                    argexpr = format!`%s.dup`(argexpr);
+                    argexpr = argexpr ~ ".dup";
                 }
             }
 
@@ -1469,10 +1446,10 @@ mixin template GenerateThisTemplate()
             args ~= paramName;
             argexprs ~= argexpr;
             fieldUseDefault ~= useDefault;
-            fieldDefault ~= defaults[i];
-            fieldAttributes ~= attributes[i];
-            defaultAssignments ~= useDefault ? (` = ` ~ defaults[i]) : ``;
-            types ~= passExprAsConst ? (`const ` ~ memberTypes[i]) : memberTypes[i];
+            fieldDefault ~= default_;
+            fieldAttributes ~= attributes;
+            defaultAssignments ~= useDefault ? (` = ` ~ default_) : ``;
+            types ~= passExprAsConst ? (`const ` ~ memberTypeAsString) : memberTypeAsString;
         }
 
         size_t establishParameterRank(size_t i)
@@ -1603,8 +1580,8 @@ public template ConstructorField(Type_, bool useDefault_, alias fieldDefault_, a
 }
 
 public template saveConstructorInfo(string[] fields_, Fields...)
-if (fields_.length == Fields.length
-    && allSatisfy!(ApplyLeft!(isInstanceOf, ConstructorField), Fields))
+// if (fields_.length == Fields.length
+//     && allSatisfy!(ApplyLeft!(isInstanceOf, ConstructorField), Fields))
 {
     import std.format : format;
 
