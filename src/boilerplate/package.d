@@ -85,3 +85,21 @@ unittest
 
     auto instance = Class.Builder().value;
 }
+
+@("underscore property is aliased to this")
+unittest
+{
+    struct Foo
+    {
+        @ConstRead
+        int i_;
+
+        alias i_ this;
+
+        mixin(GenerateAll);
+    }
+
+    auto builder = Foo.Builder();
+
+    cast(void) builder;
+}

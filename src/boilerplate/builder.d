@@ -226,7 +226,7 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
 
     static foreach (aliasMember; __traits(getAliasThis, T))
     {
-        mixin(`alias ` ~ aliasMember ~ ` this;`);
+        mixin(`alias ` ~ optionallyRemoveTrailingUnderline!aliasMember ~ ` this;`);
     }
 
     static if (!std.algorithm.canFind(
