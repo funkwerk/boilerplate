@@ -44,23 +44,11 @@ public mixin template BuilderImpl(T, Info = Info, alias BuilderProxy = BuilderPr
             alias BaseType = FieldType;
         }
 
-        // type has a builder ... that constructs it
-        // protects from such IDIOTIC DESIGN ERRORS as `alias Nullable!T.get this`
-        // NOTE: can't use hasMember because https://issues.dlang.org/show_bug.cgi?id=13269
+        // type has a builder
         static if (__traits(compiles, BaseType.Builder()))
         {
-            alias BuilderResultType = typeof(BaseType.Builder().builderValue);
-
-            static if (is(BuilderResultType: BaseType))
-            {
-                alias Type = BuilderProxy!FieldType;
-                enum isBuildable = true;
-            }
-            else
-            {
-                alias Type = Optional!FieldType;
-                enum isBuildable = false;
-            }
+            alias Type = BuilderProxy!FieldType;
+            enum isBuildable = true;
         }
         else static if (is(FieldType == E[], E))
         {
