@@ -1810,8 +1810,22 @@ unittest
     builder.value.shouldEqual(Bar(Nullable!Foo()));
 }
 
+@("@safe generated class constructor")
+unittest
+{
+    class Foo
+    {
+        pure:
+        @safe:
+
+        int i;
+
+        mixin(GenerateThis);
+    }
+}
+
 // helper to avoid lambda, std.algorithm use in heavily-reused mixin GenerateThisTemplate
-public string[] filterCanFind(string[] array, string[] other)
+public string[] filterCanFind(string[] array, string[] other) nothrow pure @safe
 {
     import std.algorithm : canFind, filter;
 
