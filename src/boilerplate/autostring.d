@@ -1351,7 +1351,14 @@ public bool isMemberUnlabeledByDefault(Type)(string field, bool attribNonEmpty)
 
     field = field.toLower;
 
-    static if (isInputRange!Type)
+    static if (is(Type: const Nullable!BaseType, BaseType))
+    {
+        if (field == BaseType.stringof.toLower)
+        {
+            return true;
+        }
+    }
+    else static if (isInputRange!Type)
     {
         alias BaseType = ElementType!Type;
 
@@ -1363,13 +1370,6 @@ public bool isMemberUnlabeledByDefault(Type)(string field, bool attribNonEmpty)
     else static if (is(Type: const BitFlags!BaseType, BaseType))
     {
         if (field == BaseType.stringof.toLower.pluralize)
-        {
-            return true;
-        }
-    }
-    else static if (is(Type: const Nullable!BaseType, BaseType))
-    {
-        if (field == BaseType.stringof.toLower)
         {
             return true;
         }
